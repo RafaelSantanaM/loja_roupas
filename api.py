@@ -21,30 +21,39 @@ from datetime import date
 
 import crud
 import usuarios_crud
+import refresh_tokens_crud
 import auth
 
 app = FastAPI(title="API - Cadastro de Clientes")
 
 # ---------------------------------------------------------
-# AUTENTICAÇÃO (JWT)
+# AUTENTICAÇÃO (access token + refresh token)
 # ---------------------------------------------------------
 
-# Isso diz ao FastAPI: "espere o token no cabeçalho Authorization,
-# e mostre no /docs um cadeadinho de login apontando pra /login"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 def get_usuario_atual(token: str = Depends(oauth2_scheme)) -> dict:
     """
-    Dependência usada em TODO endpoint que só exige "estar logado",
-    não importa o papel. Devolve {"username": ..., "papel": ...}.
+    Dependência usada em TODO endpoint que só exige "estar logado".
+    Devolve {"username": ..., "papel": ...}.
     """
     try:
-        dados = auth.verificar_token(token)
+        payload = auth.verificar_token(token)
     except ValueError:
-        # 401 = "não autenticado" (token ausente, inválido ou expirado)
         raise HTTPException(status_code=401, detail="Token inválido ou expirado")
-    return dados
+
+    # Um refresh token NUNCA deve ser aceito aqui -- só access token.
+    # Isso evita alguém usar o token "de vida longa" pra acessar dados,
+    # o que anularia todo o benefício de ter um token de vida curta.
+    if payload.get("tipo") != "access":
+        raise HTTPException(status_code=401, detail="Tipo de token incorreto")
+
+    return {"username": payload.get("sub"), "papel": payload.get("papel")}
 
 
 def exigir_admin(usuario: dict = Depends(get_usuario_atual)) -> dict:
@@ -62,17 +71,81 @@ def exigir_admin(usuario: dict = Depends(get_usuario_atual)) -> dict:
 @app.post("/login")
 def login(form: OAuth2PasswordRequestForm = Depends()):
     """
-    POST /login -> recebe username + senha, devolve um token JWT.
-    Depois disso, o token deve ser enviado em todo pedido seguinte,
-    no cabeçalho: Authorization: Bearer <token>
+    POST /login -> recebe username + senha, devolve DOIS tokens:
+    - access_token: vida curta (15 min), usado em cada requisição
+    - refresh_token: vida longa (7 dias), usado só pra pedir um access token novo
     """
     usuario = usuarios_crud.buscar_usuario_por_username(form.username)
     if usuario is None:
         raise HTTPException(status_code=401, detail="Usuário ou senha incorretos")
 
-    _, username, senha_hash, papel = usuario
+    usuario_id, username, senha_hash, papel = usuario
     if not auth.conferir_senha(form.password, senha_hash):
         raise HTTPException(status_code=401, detail="Usuário ou senha incorretos")
+
+    access_token = auth.criar_access_token(username, papel)
+    refresh_token, jti, expira_em = auth.criar_refresh_token(username)
+
+    # Salva o refresh token no banco -- é isso que permite revogar depois
+    refresh_tokens_crud.salvar_refresh_token(usuario_id, jti, expira_em)
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
+
+
+@app.post("/refresh")
+def refresh(dados: RefreshRequest):
+    """
+    POST /refresh -> troca um refresh token válido por um access token novo,
+    SEM precisar de usuário/senha de novo.
+    """
+    try:
+        payload = auth.verificar_token(dados.refresh_token)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Refresh token inválido ou expirado")
+
+    if payload.get("tipo") != "refresh":
+        raise HTTPException(status_code=401, detail="Tipo de token incorreto")
+
+    jti = payload.get("jti")
+    if not refresh_tokens_crud.refresh_token_esta_ativo(jti):
+        # Aqui é onde a REVOGAÇÃO realmente é sentida: mesmo que a
+        # assinatura do JWT seja válida, se ele não está mais "ativo"
+        # no banco, recusamos.
+        raise HTTPException(status_code=401, detail="Refresh token revogado ou não encontrado")
+
+    username = payload.get("sub")
+    usuario = usuarios_crud.buscar_usuario_por_username(username)
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="Usuário não encontrado")
+
+    _, _, _, papel = usuario
+    novo_access_token = auth.criar_access_token(username, papel)
+    return {"access_token": novo_access_token, "token_type": "bearer"}
+
+
+@app.post("/logout")
+def logout(dados: RefreshRequest):
+    """
+    POST /logout -> revoga um refresh token, encerrando a "sessão" de
+    verdade (o access token que já foi emitido antes ainda funciona até
+    expirar sozinho, mas não será mais possível gerar um access token novo).
+    """
+    try:
+        payload = auth.verificar_token(dados.refresh_token)
+    except ValueError:
+        # Se o token já é inválido, o objetivo (não estar mais logado)
+        # já está cumprido -- não precisa dar erro pro usuário.
+        return {"mensagem": "Logout realizado"}
+
+    jti = payload.get("jti")
+    if jti:
+        refresh_tokens_crud.revogar_refresh_token(jti)
+
+    return {"mensagem": "Logout realizado"}
 
     token = auth.criar_token(username, papel)
     return {"access_token": token, "token_type": "bearer"}
