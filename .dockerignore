@@ -1,0 +1,31 @@
+# =========================================================
+# .dockerignore
+# Mesma lógica do .gitignore, mas para o Docker: evita copiar
+# lixo/segredos para dentro da imagem, e acelera o build (menos
+# arquivos = menos dados transferidos para o "contexto de build").
+# =========================================================
+
+# Segredos -- JAMAIS dentro de uma imagem Docker. Uma imagem pode
+# ser compartilhada/publicada; se o .env fosse copiado para dentro
+# dela, o segredo vazaria para qualquer um que baixasse a imagem.
+.env
+
+# Certificados TLS locais (mesma lógica: nunca dentro da imagem)
+*.pem
+
+# Ambiente virtual -- o container terá seu PRÓPRIO Python isolado,
+# não faz sentido (e ocuparia espaço à toa) copiar o venv do host
+venv/
+.venv/
+
+__pycache__/
+*.pyc
+
+.git/
+.gitignore
+
+# Documentação de estudo -- não é necessária para a aplicação RODAR,
+# só ocupa espaço na imagem final
+*.md
+
+.pytest_cache/
