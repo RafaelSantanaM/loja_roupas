@@ -14,6 +14,7 @@ Depois, abra no navegador:
 """
 
 from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from typing import Optional
@@ -25,6 +26,28 @@ import refresh_tokens_crud
 import auth
 
 app = FastAPI(title="API - Cadastro de Clientes")
+
+# ---------------------------------------------------------
+# CORS: quais origens (sites/apps rodando em outro domínio/porta)
+# têm permissão de chamar essa API via navegador.
+# ---------------------------------------------------------
+
+# Lista "branca" (whitelist) de origens confiáveis. Em produção, isso
+# seria o domínio real do seu front-end (ex: "https://minhaloja.com"),
+# nunca "*" (que libera geral -- praticamente nunca é o que você quer
+# numa API que exige login).
+ORIGENS_PERMITIDAS = [
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ORIGENS_PERMITIDAS,
+    allow_credentials=True,       # permite enviar/receber cookies e Authorization
+    allow_methods=["*"],          # permite todos os métodos (GET, POST, DELETE...)
+    allow_headers=["*"],          # permite todos os cabeçalhos (incluindo Authorization)
+)
 
 # ---------------------------------------------------------
 # AUTENTICAÇÃO (access token + refresh token)

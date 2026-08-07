@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<!--
+    teste_cors.html
+    ================
+    Um site "de mentirinha", completamente separado da nossa API,
+    que tenta chamar http://127.0.0.1:8000 via JavaScript.
+
+    Como abrir (recomendado): em outro terminal, dentro dessa mesma pasta:
+        python3 -m http.server 5500
+    Depois acesse no navegador:
+        http://127.0.0.1:5500/teste_cors.html
+    (isso cria uma origem DIFERENTE da API, que roda na porta 8000 --
+    é exatamente esse "porta diferente = origem diferente" que ativa o CORS)
+
+    Com a API DO JEITO QUE ESTÁ AGORA (sem CORS liberado), o botão
+    abaixo vai falhar com um erro de CORS no console do navegador.
+-->
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Teste de CORS</title>
+</head>
+<body>
+    <h1>Site de teste (origem diferente da API)</h1>
+    <p>Este arquivo simula um front-end rodando em outro lugar, tentando
+       chamar a sua API. Abra o Console do navegador (F12) antes de clicar.</p>
+
+    <button onclick="testarChamada()">Chamar GET /</button>
+
+    <pre id="resultado"></pre>
+
+    <script>
+        async function testarChamada() {
+            const resultado = document.getElementById("resultado");
+            resultado.textContent = "Chamando...";
+            try {
+                const resposta = await fetch("http://127.0.0.1:8000/");
+                const dados = await resposta.json();
+                resultado.textContent = "Sucesso: " + JSON.stringify(dados);
+            } catch (erro) {
+                resultado.textContent = "ERRO (provavelmente CORS): " + erro;
+            }
+        }
+    </script>
+</body>
+</html>
