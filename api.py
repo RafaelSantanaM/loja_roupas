@@ -13,12 +13,17 @@ Depois, abra no navegador:
 (O FastAPI cria essa telinha de testes sozinho, automaticamente!)
 """
 
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import date
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 import crud
 import usuarios_crud
@@ -26,6 +31,27 @@ import refresh_tokens_crud
 import auth
 
 app = FastAPI(title="API - Cadastro de Clientes")
+
+# ---------------------------------------------------------
+# RATE LIMITING
+# ---------------------------------------------------------
+# key_func=get_remote_address -> identifica o "cliente" pelo IP de origem.
+#
+# ATENÇÃO (limitação documentada, não um descuido):
+# 1) O armazenamento aqui é EM MEMÓRIA (padrão da lib). Funciona
+#    corretamente com UMA instância da API. Em ambiente com múltiplas
+#    instâncias atrás de um load balancer, cada processo teria seu
+#    próprio contador isolado -- a solução correta em produção é um
+#    backend compartilhado (Redis), configurado via storage_uri=.
+# 2) get_remote_address confia no IP de conexão direta. Atrás de um
+#    proxy reverso, seria necessário configurar extração segura do
+#    X-Forwarded-For, validando que a origem do header é o próprio
+#    proxy confiável -- nunca aceitar esse header vindo direto do
+#    cliente sem essa validação.
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # ---------------------------------------------------------
 # CORS: quais origens (sites/apps rodando em outro domínio/porta)
@@ -92,11 +118,16 @@ def exigir_admin(usuario: dict = Depends(get_usuario_atual)) -> dict:
 
 
 @app.post("/login")
-def login(form: OAuth2PasswordRequestForm = Depends()):
+@limiter.limit("5/minute")
+def login(request: Request, form: OAuth2PasswordRequestForm = Depends()):
     """
     POST /login -> recebe username + senha, devolve DOIS tokens:
     - access_token: vida curta (15 min), usado em cada requisição
     - refresh_token: vida longa (7 dias), usado só pra pedir um access token novo
+
+    RATE LIMIT: 5 tentativas por minuto, por IP. Alvo primário de
+    ataques de força bruta e credential stuffing -- justifica o limite
+    mais agressivo de toda a API.
     """
     usuario = usuarios_crud.buscar_usuario_por_username(form.username)
     if usuario is None:
@@ -120,10 +151,14 @@ def login(form: OAuth2PasswordRequestForm = Depends()):
 
 
 @app.post("/refresh")
-def refresh(dados: RefreshRequest):
+@limiter.limit("10/minute")
+def refresh(request: Request, dados: RefreshRequest):
     """
     POST /refresh -> troca um refresh token válido por um access token novo,
     SEM precisar de usuário/senha de novo.
+
+    RATE LIMIT: 10/minuto -- moderado. Uso legítimo é esporádico (só
+    quando o access token expira); rajadas aqui são indício de anomalia.
     """
     try:
         payload = auth.verificar_token(dados.refresh_token)
@@ -170,9 +205,6 @@ def logout(dados: RefreshRequest):
 
     return {"mensagem": "Logout realizado"}
 
-    token = auth.criar_token(username, papel)
-    return {"access_token": token, "token_type": "bearer"}
-
 
 # =========================================================
 # "Moldes" dos dados que entram e saem da API (Pydantic).
@@ -205,7 +237,9 @@ def raiz():
 
 
 @app.get("/clientes")
+@limiter.limit("60/minute")
 def listar(
+    request: Request,
     usuario: dict = Depends(get_usuario_atual),
     pagina: int = Query(1, ge=1, description="Número da página, começando em 1"),
     tamanho_pagina: int = Query(10, ge=1, le=100, description="Quantos clientes por página (máx 100)"),
