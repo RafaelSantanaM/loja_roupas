@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: loja_roupas
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"   # opcional -- só se você quiser inspecionar de fora
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db        # <- o NOME DO SERVIÇO funciona como hostname
+      DB_PORT: 5432
+      DB_NAME: loja_roupas
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres_data:
