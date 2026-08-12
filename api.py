@@ -29,6 +29,7 @@ import crud
 import usuarios_crud
 import refresh_tokens_crud
 import auth
+import cache
 
 app = FastAPI(title="API - Cadastro de Clientes")
 
@@ -273,13 +274,22 @@ def listar(
 
 @app.get("/clientes/{cliente_id}")
 def buscar(cliente_id: int, usuario: dict = Depends(get_usuario_atual)):
-    """GET /clientes/5 -> busca um cliente específico (Read)."""
+    """GET /clientes/5 -> busca um cliente específico (Read), com cache."""
+    cliente_cacheado = cache.buscar_cliente_no_cache(cliente_id)
+    if cliente_cacheado is not None:
+        # CACHE HIT: devolve sem tocar o banco
+        return {**cliente_cacheado, "_origem": "cache"}
+
     linha = crud.buscar_cliente_por_id(cliente_id)
     if linha is None:
         # 404 = "não encontrado", um dos códigos de status HTTP mais usados
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     colunas = ["id", "nome", "email", "telefone", "data_nascimento", "endereco", "criado_em"]
-    return dict(zip(colunas, linha))
+    cliente = dict(zip(colunas, linha))
+
+    # CACHE MISS: buscou no banco, agora grava para a próxima consulta ser um hit
+    cache.salvar_cliente_no_cache(cliente_id, cliente)
+    return {**cliente, "_origem": "banco"}
 
 
 @app.post("/clientes", status_code=201)
@@ -310,6 +320,9 @@ def atualizar(cliente_id: int, dados: ClienteAtualizacao, usuario: dict = Depend
     )
     if linhas_alteradas == 0:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    # Invalidação ativa: garante que a próxima leitura não sirva dado velho
+    cache.invalidar_cliente_no_cache(cliente_id)
     return {"mensagem": "Cliente atualizado com sucesso"}
 
 
@@ -319,4 +332,6 @@ def deletar(cliente_id: int, usuario: dict = Depends(exigir_admin)):
     linhas_apagadas = crud.deletar_cliente(cliente_id)
     if linhas_apagadas == 0:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    cache.invalidar_cliente_no_cache(cliente_id)
     return {"mensagem": "Cliente apagado com sucesso"}
