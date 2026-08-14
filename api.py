@@ -13,6 +13,8 @@ Depois, abra no navegador:
 (O FastAPI cria essa telinha de testes sozinho, automaticamente!)
 """
 
+import os
+
 from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -234,7 +236,11 @@ class ClienteAtualizacao(BaseModel):
 @app.get("/")
 def raiz():
     """Rota simples só para conferir se a API está no ar."""
-    return {"mensagem": "API da loja de roupas está funcionando!"}
+    # INSTANCE_NAME é lido do ambiente -- cada instância pode ter um
+    # valor diferente, o que nos permite VISUALIZAR o round robin
+    # do load balancer na prática (ver LOAD_BALANCING.md).
+    instancia = os.getenv("INSTANCE_NAME", "instancia-desconhecida")
+    return {"mensagem": "API da loja de roupas está funcionando!", "atendido_por": instancia}
 
 
 @app.get("/clientes")
