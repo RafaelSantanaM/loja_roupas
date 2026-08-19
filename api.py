@@ -32,6 +32,7 @@ import usuarios_crud
 import refresh_tokens_crud
 import auth
 import cache
+import filas
 
 app = FastAPI(title="API - Cadastro de Clientes")
 
@@ -312,6 +313,20 @@ def criar(cliente: ClienteEntrada, usuario: dict = Depends(get_usuario_atual)):
     except Exception as erro:
         # 400 = "pedido malformado" (ex: e-mail já cadastrado)
         raise HTTPException(status_code=400, detail=str(erro))
+
+    # PUBLICA na fila, pedindo o envio do e-mail de boas-vindas depois.
+    # Isso é ASSÍNCRONO: não esperamos o e-mail ser enviado agora --
+    # só avisamos que ele PRECISA ser enviado, e seguimos em frente.
+    #
+    # DECISÃO IMPORTANTE: se o RabbitMQ estiver fora do ar, isso NÃO
+    # deve impedir o cliente de ser criado -- o cadastro é a operação
+    # principal, o e-mail é secundário. Por isso capturamos qualquer
+    # erro aqui, sem deixá-lo "vazar" para o try/except acima.
+    try:
+        filas.publicar_boas_vindas(novo_id, cliente.nome, cliente.email)
+    except Exception as erro:
+        print(f"⚠️  Não foi possível publicar na fila (cliente foi criado normalmente): {erro}")
+
     return {"id": novo_id, "mensagem": "Cliente criado com sucesso"}
 
 
