@@ -159,10 +159,10 @@ def test_buscar_cliente_inexistente_retorna_404(client, admin_token):
 # ---------------------------------------------------------
 
 def test_fluxo_refresh_token_emite_novo_access_token(client):
-    resposta_login = client.post("/login", data={"username": "gerente", "password": "senha123"})
+    resposta_login = client.post("/auth/login", data={"username": "gerente", "password": "senha123"})
     refresh_token = resposta_login.json()["refresh_token"]
 
-    resposta_refresh = client.post("/refresh", json={"refresh_token": refresh_token})
+    resposta_refresh = client.post("/auth/refresh", json={"refresh_token": refresh_token})
 
     assert resposta_refresh.status_code == 200
     assert "access_token" in resposta_refresh.json()
@@ -171,15 +171,15 @@ def test_fluxo_refresh_token_emite_novo_access_token(client):
 def test_logout_revoga_refresh_token(client):
     # Arrange: login novo, exclusivo pra esse teste (não reaproveita a fixture,
     # porque vamos INVALIDAR esse refresh token, e não queremos afetar outros testes)
-    resposta_login = client.post("/login", data={"username": "gerente", "password": "senha123"})
+    resposta_login = client.post("/auth/login", data={"username": "gerente", "password": "senha123"})
     refresh_token = resposta_login.json()["refresh_token"]
 
     # Act 1: revoga
-    resposta_logout = client.post("/logout", json={"refresh_token": refresh_token})
+    resposta_logout = client.post("/auth/logout", json={"refresh_token": refresh_token})
     assert resposta_logout.status_code == 200
 
     # Act 2: tenta usar o MESMO refresh token, já revogado
-    resposta_refresh = client.post("/refresh", json={"refresh_token": refresh_token})
+    resposta_refresh = client.post("/auth/refresh", json={"refresh_token": refresh_token})
 
     # Assert: deve ser recusado, mesmo com assinatura JWT ainda matematicamente válida
     assert resposta_refresh.status_code == 401

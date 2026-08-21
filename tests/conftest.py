@@ -13,7 +13,7 @@ em vez de cada receita pesar tudo de novo do zero.
 import pytest
 from fastapi.testclient import TestClient
 
-from api import app
+from app.main import app
 
 
 @pytest.fixture(scope="session")
@@ -40,7 +40,7 @@ def client():
 @pytest.fixture(scope="session")
 def admin_token(client):
     """Token de acesso de um usuário com papel 'admin' (usuário 'gerente')."""
-    resposta = client.post("/login", data={"username": "gerente", "password": "senha123"})
+    resposta = client.post("/auth/login", data={"username": "gerente", "password": "senha123"})
     assert resposta.status_code == 200, "Pré-condição falhou: usuário 'gerente' precisa existir (rode usuarios_crud.py)"
     return resposta.json()["access_token"]
 
@@ -48,6 +48,6 @@ def admin_token(client):
 @pytest.fixture(scope="session")
 def funcionario_token(client):
     """Token de acesso de um usuário com papel 'funcionario' (usuário 'vendedor')."""
-    resposta = client.post("/login", data={"username": "vendedor", "password": "senha123"})
+    resposta = client.post("/auth/login", data={"username": "vendedor", "password": "senha123"})
     assert resposta.status_code == 200, "Pré-condição falhou: usuário 'vendedor' precisa existir (rode usuarios_crud.py)"
     return resposta.json()["access_token"]
