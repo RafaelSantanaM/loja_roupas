@@ -2,18 +2,18 @@
 app/dependencies.py
 =====================
 As "travas" de autenticação (get_usuario_atual) e autorização
-(exigir_admin), extraídas do antigo api.py. Ficam num arquivo próprio
-porque tanto auth_router.py quanto clientes_router.py precisam delas.
+(exigir_admin).
 
-Repare: ainda usamos "import auth" (o módulo antigo, na raiz do
-projeto) -- ele NÃO mudou de lugar neste commit. Isso será uma
-refatoração separada, mais à frente.
+Neste commit, o import muda de "import auth" (módulo antigo, na
+raiz) para "from app.core import security" (novo endereço) -- e
+as chamadas de "auth.verificar_token(...)" viram
+"security.verificar_token(...)".
 """
 
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 
-import auth
+from app.core import security
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
@@ -21,7 +21,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 def get_usuario_atual(token: str = Depends(oauth2_scheme)) -> dict:
     """Trava 1: exige um access token válido."""
     try:
-        payload = auth.verificar_token(token)
+        payload = security.verificar_token(token)
     except ValueError:
         raise HTTPException(status_code=401, detail="Token inválido ou expirado")
 

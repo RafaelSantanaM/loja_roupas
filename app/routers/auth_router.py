@@ -1,20 +1,17 @@
 """
 app/routers/auth_router.py
 =============================
-Rotas de autenticação (login, refresh, logout), extraídas do antigo
-api.py. Um APIRouter agrupa endpoints relacionados sob um prefixo
-comum -- aqui, tudo nasce sob /auth (ex: POST /auth/login), em vez
-de conviver solto junto com as rotas de clientes no mesmo arquivo.
+Rotas de autenticação (login, refresh, logout).
 
-NOTA: os endpoints continuam usando os módulos antigos (auth, crud,
-usuarios_crud, refresh_tokens_crud) exatamente como estavam em
-api.py -- só o LOCAL do código mudou, a lógica é idêntica.
+Neste commit, o import muda de "import auth" para
+"from app.core import security", e todas as chamadas "auth.xxx(...)"
+viram "security.xxx(...)".
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 
-import auth
+from app.core import security
 import usuarios_crud
 import refresh_tokens_crud
 from app.limiter import limiter
@@ -35,11 +32,11 @@ def login(request: Request, form: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=401, detail="Usuário ou senha incorretos")
 
     usuario_id, username, senha_hash, papel = usuario
-    if not auth.conferir_senha(form.password, senha_hash):
+    if not security.conferir_senha(form.password, senha_hash):
         raise HTTPException(status_code=401, detail="Usuário ou senha incorretos")
 
-    access_token = auth.criar_access_token(username, papel)
-    refresh_token, jti, expira_em = auth.criar_refresh_token(username)
+    access_token = security.criar_access_token(username, papel)
+    refresh_token, jti, expira_em = security.criar_refresh_token(username)
     refresh_tokens_crud.salvar_refresh_token(usuario_id, jti, expira_em)
 
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
@@ -50,7 +47,7 @@ def login(request: Request, form: OAuth2PasswordRequestForm = Depends()):
 def refresh(request: Request, dados: RefreshRequest):
     """POST /auth/refresh -> troca um refresh token válido por um access token novo."""
     try:
-        payload = auth.verificar_token(dados.refresh_token)
+        payload = security.verificar_token(dados.refresh_token)
     except ValueError:
         raise HTTPException(status_code=401, detail="Refresh token inválido ou expirado")
 
@@ -67,7 +64,7 @@ def refresh(request: Request, dados: RefreshRequest):
         raise HTTPException(status_code=401, detail="Usuário não encontrado")
 
     _, _, _, papel = usuario
-    novo_access_token = auth.criar_access_token(username, papel)
+    novo_access_token = security.criar_access_token(username, papel)
     return {"access_token": novo_access_token, "token_type": "bearer"}
 
 
@@ -75,7 +72,7 @@ def refresh(request: Request, dados: RefreshRequest):
 def logout(dados: RefreshRequest):
     """POST /auth/logout -> revoga um refresh token."""
     try:
-        payload = auth.verificar_token(dados.refresh_token)
+        payload = security.verificar_token(dados.refresh_token)
     except ValueError:
         return {"mensagem": "Logout realizado"}
 

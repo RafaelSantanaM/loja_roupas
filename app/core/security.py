@@ -1,13 +1,16 @@
 """
-auth.py
-=======
+app/core/security.py
+======================
 Hash de senha (bcrypt) e emissão/verificação de JWT.
 
-Antes deste commit: CHAVE_SECRETA vinha de os.getenv() direto aqui;
-ALGORITMO, MINUTOS_ACCESS_TOKEN e DIAS_REFRESH_TOKEN eram constantes
-fixas no código, sem passar por variável de ambiente nenhuma. Agora
-tudo isso vem de app/core/config.py -- inclusive os valores que antes
-nem eram configuráveis por fora (algoritmo e durações), passam a ser.
+Antes deste commit, este arquivo era auth.py, solto na raiz do
+projeto. Foi renomeado para "security.py" (convenção comum em
+projetos FastAPI reais) e movido para dentro de app/core/, junto
+com as outras preocupações transversais (config, cache) -- ou seja,
+coisas usadas por múltiplos domínios (autenticação, clientes),
+não pertencentes a um único domínio específico.
+
+O CONTEÚDO não mudou -- só o endereço.
 """
 
 import uuid

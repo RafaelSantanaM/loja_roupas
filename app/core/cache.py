@@ -1,13 +1,14 @@
 """
-cache.py
-========
+app/core/cache.py
+===================
 Camada de cache usando Redis.
 
-Antes deste commit, host/porta/TTL estavam escritos DIRETO no código
-(nem passavam por variável de ambiente). Agora vêm de
-app/core/config.py -- isso significa que, pela primeira vez, dá pra
-apontar para um Redis diferente (ex: outro host em produção) só
-mudando o .env, sem tocar em código.
+Antes deste commit, este arquivo era cache.py, solto na raiz do
+projeto. Movido para app/core/ pelo mesmo motivo de security.py:
+é uma preocupação transversal, usada só pelo domínio de clientes
+hoje, mas conceitualmente não pertence a nenhum domínio específico.
+
+O CONTEÚDO não mudou -- só o endereço.
 """
 
 import json

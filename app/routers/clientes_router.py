@@ -1,14 +1,17 @@
 """
 app/routers/clientes_router.py
 =================================
-Rotas do domínio "clientes" (CRUD completo), extraídas do antigo
-api.py. Nasce sob o prefixo /clientes.
+Rotas do domínio "clientes" (CRUD completo).
+
+Neste commit, o import muda de "import cache" para
+"from app.core import cache" -- as chamadas "cache.xxx(...)"
+continuam exatamente iguais, só o endereço de origem mudou.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 
-import cache
+from app.core import cache
 import crud
 import filas
 from app.dependencies import get_usuario_atual, exigir_admin

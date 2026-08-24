@@ -1,13 +1,14 @@
 """
-db.py
-=====
-Aqui é o "porteiro" do banco de dados: só ele sabe o caminho até o
-banco e como bater na porta certinho.
+app/db/session.py
+===================
+O "porteiro" da conexão com o PostgreSQL.
 
-Antes deste commit, este arquivo lia a configuração sozinho, com
-os.getenv() e load_dotenv() manual. Agora ele importa a configuração
-JÁ PRONTA de app/core/config.py -- não muda o QUE ele faz, só de
-ONDE ele busca os valores.
+Antes deste commit, este arquivo era db.py, solto na raiz do
+projeto. Movido para app/db/ -- essa pasta vai conter, além disso,
+as migrations SQL (num commit futuro), reunindo tudo que é "camada
+de banco de dados" num único lugar reconhecível.
+
+O CONTEÚDO não mudou -- só o endereço.
 """
 
 import psycopg2
@@ -16,10 +17,7 @@ from app.core.config import settings
 
 
 def get_connection():
-    """
-    Abre uma conexão segura com o PostgreSQL, usando a configuração
-    centralizada.
-    """
+    """Abre uma conexão segura com o PostgreSQL, usando a configuração centralizada."""
     return psycopg2.connect(
         host=settings.db_host,
         port=settings.db_port,

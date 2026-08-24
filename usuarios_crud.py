@@ -2,16 +2,13 @@
 usuarios_crud.py
 ================
 CRUD simples para a tabela de usuários (quem pode logar na API).
-Separado do crud.py de clientes de propósito -- são "coisas"
-diferentes no sistema.
 """
 
-from db import get_connection
-from auth import gerar_hash_senha
+from app.db.session import get_connection
+from app.core.security import gerar_hash_senha
 
 
 def criar_usuario(username: str, senha_pura: str, papel: str = "funcionario") -> int:
-    """Cria um novo usuário, já salvando a senha como HASH (nunca em texto puro)."""
     senha_hash = gerar_hash_senha(senha_pura)
     sql = "INSERT INTO usuarios (username, senha_hash, papel) VALUES (%s, %s, %s) RETURNING id;"
     with get_connection() as conn:
@@ -32,8 +29,6 @@ def buscar_usuario_por_username(username: str):
 
 
 if __name__ == "__main__":
-    # Rode este arquivo diretamente UMA VEZ para criar usuários de teste:
-    #   python usuarios_crud.py
     novo_id = criar_usuario("gerente", "senha123", papel="admin")
     print(f"Usuário 'gerente' (admin) criado com id={novo_id}.")
 
