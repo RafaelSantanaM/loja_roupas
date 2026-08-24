@@ -1,66 +1,54 @@
 """
 app/core/config.py
 ====================
-Configuração CENTRALIZADA da aplicação. Antes deste commit, cada
-arquivo lia configuração à sua própria maneira:
-  - db.py usava os.getenv() com load_dotenv() manual
-  - auth.py usava os.getenv() só para o segredo do JWT, e tinha
-    ALGORITMO/MINUTOS_ACCESS_TOKEN/DIAS_REFRESH_TOKEN fixos no código
-  - cache.py e filas.py tinham host/porta escritos DIRETO no código,
-    sem nem passar por variável de ambiente
-  - app/main.py usava os.getenv() só para o INSTANCE_NAME
+Configuração CENTRALIZADA da aplicação.
 
-Isso é frágil: não existe um único lugar para conferir "tudo que este
-sistema precisa para rodar", e um valor mudado num arquivo não se
-reflete automaticamente em outro que dependa do mesmo dado.
+SEGURANÇA: jwt_secret_key e db_password NÃO têm valor padrão. Isso é
+proposital -- são segredos, e um segredo com "valor de exemplo"
+embutido no código-fonte público é uma vulnerabilidade conhecida,
+catalogada como "insecure default" (CWE-1188) e relacionada a
+"hard-coded credentials" (CWE-798).
 
-Com pydantic-settings, TODA configuração vira um campo tipado nesta
-classe. A biblioteca lê variáveis de ambiente (ou um arquivo .env)
-automaticamente, convertendo o texto para o tipo certo (int, str...),
-e gera um erro claro na inicialização se algo obrigatório faltar --
-em vez de descobrir isso só quando o código tentar usar o valor,
-no meio de uma requisição.
+Sem valor padrão, o pydantic-settings FALHA NA INICIALIZAÇÃO se essas
+variáveis não estiverem definidas no .env ou no ambiente -- a
+aplicação recusa-se a subir "silenciosamente insegura". É melhor
+travar na hora do deploy, com um erro claro, do que rodar em produção
+usando um segredo que qualquer pessoa lendo o repositório já conhece.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # --- Banco de dados (antes em db.py) ---
+    # --- Banco de dados ---
     db_host: str = "localhost"
     db_port: int = 5432
     db_name: str = "loja_roupas"
     db_user: str = "app_loja"
-    db_password: str = ""
+    db_password: str          # OBRIGATÓRIO -- sem valor padrão, de propósito
     db_sslmode: str = "prefer"
 
-    # --- Autenticação (antes em auth.py) ---
-    jwt_secret_key: str = "troque-essa-chave-em-producao"
+    # --- Autenticação ---
+    jwt_secret_key: str       # OBRIGATÓRIO -- sem valor padrão, de propósito
     jwt_algoritmo: str = "HS256"
     minutos_access_token: int = 15
     dias_refresh_token: int = 7
 
-    # --- Cache / Redis (antes hardcoded em cache.py) ---
+    # --- Cache / Redis ---
     redis_host: str = "localhost"
     redis_port: int = 6379
     cache_ttl_segundos: int = 60
 
-    # --- Fila / RabbitMQ (antes hardcoded em filas.py) ---
+    # --- Fila / RabbitMQ ---
     rabbitmq_host: str = "localhost"
 
-    # --- CORS (antes hardcoded em app/main.py) ---
+    # --- CORS ---
     origens_permitidas: list[str] = ["http://127.0.0.1:5500", "http://localhost:5500"]
 
-    # --- Identificação da instância (antes em app/main.py via os.getenv) ---
+    # --- Identificação da instância ---
     instance_name: str = "instancia-desconhecida"
 
-    # Lê automaticamente um arquivo .env na raiz do projeto, além de
-    # variáveis de ambiente reais do sistema operacional.
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
-# Instância única (padrão "Singleton"), importada por todo o resto do
-# projeto. Só existe UM objeto de configuração vivo durante a execução
-# inteira, evitando reler o .env repetidamente ou ter valores
-# divergentes em partes diferentes do código.
 settings = Settings()
