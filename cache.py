@@ -1,18 +1,21 @@
 """
 cache.py
 ========
-Camada de cache usando Redis. Centralizamos aqui a lógica de
-get/set/invalidate, para não espalhar detalhes de Redis pelo crud.py.
+Camada de cache usando Redis.
+
+Antes deste commit, host/porta/TTL estavam escritos DIRETO no código
+(nem passavam por variável de ambiente). Agora vêm de
+app/core/config.py -- isso significa que, pela primeira vez, dá pra
+apontar para um Redis diferente (ex: outro host em produção) só
+mudando o .env, sem tocar em código.
 """
 
 import json
 import redis
 
-# decode_responses=True -> o Redis devolve strings Python normais,
-# em vez de bytes (b"..."), facilitando o uso direto.
-r = redis.Redis(host="localhost", port=6379, decode_responses=True)
+from app.core.config import settings
 
-TTL_SEGUNDOS = 60  # tempo de vida do cache: 60 segundos
+r = redis.Redis(host=settings.redis_host, port=settings.redis_port, decode_responses=True)
 
 
 def chave_cliente(cliente_id: int) -> str:
@@ -30,7 +33,7 @@ def buscar_cliente_no_cache(cliente_id: int):
 
 def salvar_cliente_no_cache(cliente_id: int, dados: dict) -> None:
     """Grava o cliente no cache, com expiração automática (TTL)."""
-    r.set(chave_cliente(cliente_id), json.dumps(dados, default=str), ex=TTL_SEGUNDOS)
+    r.set(chave_cliente(cliente_id), json.dumps(dados, default=str), ex=settings.cache_ttl_segundos)
 
 
 def invalidar_cliente_no_cache(cliente_id: int) -> None:

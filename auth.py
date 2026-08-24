@@ -1,31 +1,23 @@
 """
 auth.py
 =======
-Aqui moram as duas partes da autenticação:
+Hash de senha (bcrypt) e emissão/verificação de JWT.
 
-1) HASH DE SENHA (bcrypt) -- pra nunca guardar senha em texto puro
-2) JWT (JSON Web Token) -- o "crachá temporário" que o usuário
-   carrega depois de logar
-
-Analogia geral: fazer login é como entrar num prédio. Você mostra
-seu documento na portaria (usuário + senha) UMA VEZ, e ganha um
-CRACHÁ (o token) que te deixa entrar nas salas (endpoints) sem
-precisar mostrar o documento de novo a cada porta -- só que esse
-crachá expira sozinho depois de um tempo.
+Antes deste commit: CHAVE_SECRETA vinha de os.getenv() direto aqui;
+ALGORITMO, MINUTOS_ACCESS_TOKEN e DIAS_REFRESH_TOKEN eram constantes
+fixas no código, sem passar por variável de ambiente nenhuma. Agora
+tudo isso vem de app/core/config.py -- inclusive os valores que antes
+nem eram configuráveis por fora (algoritmo e durações), passam a ser.
 """
 
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 
-# ---------------------------------------------------------
-# 1) HASH DE SENHA
-# ---------------------------------------------------------
+from app.core.config import settings
 
-# "bcrypt" é o algoritmo de hash escolhido -- padrão de mercado
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -35,65 +27,39 @@ def gerar_hash_senha(senha_pura: str) -> str:
 
 
 def conferir_senha(senha_pura: str, hash_salvo: str) -> bool:
-    """
-    Confere se a senha digitada "bate" com o hash salvo no banco.
-    Não existe 'descriptografar' aqui -- o que acontece é: pega a
-    senha digitada, passa pelo mesmo processo de hash, e compara
-    os dois resultados.
-    """
+    """Confere se a senha digitada 'bate' com o hash salvo no banco."""
     return pwd_context.verify(senha_pura, hash_salvo)
-
-
-# ---------------------------------------------------------
-# 2) TOKENS: access token (curto) + refresh token (longo)
-# ---------------------------------------------------------
-
-CHAVE_SECRETA = os.getenv("JWT_SECRET_KEY", "troque-essa-chave-em-producao")
-ALGORITMO = "HS256"
-
-# Access token: curto de propósito -- é o que viaja em CADA requisição
-MINUTOS_ACCESS_TOKEN = 15
-
-# Refresh token: longo -- só é usado pra pedir um access token novo
-DIAS_REFRESH_TOKEN = 7
 
 
 def criar_access_token(username: str, papel: str) -> str:
     """Gera o token de acesso, de vida curta, usado em cada requisição."""
-    expira_em = datetime.now(timezone.utc) + timedelta(minutes=MINUTOS_ACCESS_TOKEN)
+    expira_em = datetime.now(timezone.utc) + timedelta(minutes=settings.minutos_access_token)
     payload = {
         "sub": username,
         "papel": papel,
         "tipo": "access",
         "exp": expira_em,
     }
-    return jwt.encode(payload, CHAVE_SECRETA, algorithm=ALGORITMO)
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algoritmo)
 
 
 def criar_refresh_token(username: str) -> tuple[str, str, datetime]:
-    """
-    Gera o token de renovação, de vida longa.
-    Devolve (token, jti, data_de_expiracao) -- o "jti" e a data de
-    expiração são o que vamos SALVAR NO BANCO, pra poder revogar depois.
-    """
-    jti = str(uuid.uuid4())  # um "número de série" único pra esse token
-    expira_em = datetime.now(timezone.utc) + timedelta(days=DIAS_REFRESH_TOKEN)
+    """Gera o token de renovação, de vida longa. Devolve (token, jti, data_de_expiracao)."""
+    jti = str(uuid.uuid4())
+    expira_em = datetime.now(timezone.utc) + timedelta(days=settings.dias_refresh_token)
     payload = {
         "sub": username,
         "tipo": "refresh",
         "jti": jti,
         "exp": expira_em,
     }
-    token = jwt.encode(payload, CHAVE_SECRETA, algorithm=ALGORITMO)
+    token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algoritmo)
     return token, jti, expira_em
 
 
 def verificar_token(token: str) -> dict:
-    """
-    Confere assinatura e validade de QUALQUER um dos dois tipos de token.
-    Devolve o payload inteiro decodificado, ou levanta um erro.
-    """
+    """Confere assinatura e validade de qualquer um dos dois tipos de token."""
     try:
-        return jwt.decode(token, CHAVE_SECRETA, algorithms=[ALGORITMO])
+        return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algoritmo])
     except JWTError:
         raise ValueError("Token inválido ou expirado")
