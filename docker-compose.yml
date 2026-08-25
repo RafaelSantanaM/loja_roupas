@@ -7,23 +7,53 @@ services:
       POSTGRES_DB: loja_roupas
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./app/db/migrations:/docker-entrypoint-initdb.d:ro
     ports:
-      - "5434:5432"   # opcional -- só se você quiser inspecionar de fora
+      - "5434:5432"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    ports:
+      - "5672:5672"     # Porta de comunicação AMQP
+      - "15672:15672"   # Painel Web de gerenciamento do RabbitMQ
 
   api:
     build: .
     restart: unless-stopped
     depends_on:
       - db
+      - redis
+      - rabbitmq
     environment:
-      DB_HOST: db        # <- o NOME DO SERVIÇO funciona como hostname
+      DB_HOST: db
       DB_PORT: 5432
       DB_NAME: loja_roupas
       DB_USER: postgres
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
     ports:
       - "8000:8000"
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["python", "-m", "app.workers.email_worker"]
+    depends_on:
+      - rabbitmq
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
 
 volumes:
   postgres_data:

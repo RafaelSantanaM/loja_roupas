@@ -42,4 +42,4 @@ EXPOSE 8000
 #    container só aceitaria conexões de DENTRO dele mesmo --
 #    "0.0.0.0" significa "aceite conexões de qualquer endereço",
 #    o que é necessário para o tráfego externo (mapeado via -p) chegar.
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
