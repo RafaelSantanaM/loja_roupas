@@ -1,37 +1,24 @@
 # =========================================================
 # .gitignore
-# Lista de arquivos e pastas que o Git deve "fingir que não existem".
+# Arquivos e pastas ignorados pelo controle de versão Git.
 # =========================================================
 
-# Segredos de verdade -- NUNCA subir pro GitHub
+# Variáveis de ambiente reais (segredos - NUNCA versionar)
 .env
-.env.example
 
-# Certificados TLS (chave privada nunca deve ser compartilhada,
-# mesmo sendo um certificado de estudo/local)
+# Certificados TLS / Chaves privadas locais
 *.pem
 
-# Ambiente virtual do Python (cada pessoa cria o seu, não precisa versionar)
+# Ambiente virtual Python
 venv/
 .venv/
 
-# Arquivos temporários que o próprio Python cria sozinho
+# Caches e compilação
 __pycache__/
 *.pyc
+.pytest_cache/
 
-# Arquivos de configuração de editores (opcional, mas comum)
+# Configurações de IDEs e OS
 .vscode/
-
-# Arquivos de sistema do Mac/Linux (caso apareçam)
+.idea/
 .DS_Store
-
-# Arquivos de estudo 
-files 
-files (1)
-AUTENTICACAO.md
-autenticacao.zip
-EXERCICIO.md
-files.zip
-files (1).zip
-RBAC.md
-roadmap-estudos.md
