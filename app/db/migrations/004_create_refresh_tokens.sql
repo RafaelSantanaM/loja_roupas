@@ -1,19 +1,12 @@
 -- =========================================================
--- SCHEMA_REFRESH_TOKENS.SQL
--- Guarda os refresh tokens "ativos" de cada usuário. É isso que
--- permite REVOGAR um token antes da hora -- coisa que um JWT
--- sozinho não permite fazer.
+-- 004_create_refresh_tokens.sql
+-- Cria a tabela de refresh tokens para suporte a revogação de sessão.
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id          SERIAL PRIMARY KEY,
     usuario_id  INTEGER NOT NULL REFERENCES usuarios(id),
-
-    -- "jti" = JWT ID: um identificador único, gerado junto com o token,
-    -- que vai DENTRO do próprio JWT. Não guardamos o token inteiro aqui,
-    -- só esse "número de série" dele -- é o suficiente para achar e revogar.
     jti         VARCHAR(64) NOT NULL UNIQUE,
-
     expira_em   TIMESTAMP NOT NULL,
     revogado    BOOLEAN NOT NULL DEFAULT FALSE,
     criado_em   TIMESTAMP NOT NULL DEFAULT NOW()
