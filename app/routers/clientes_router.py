@@ -13,7 +13,7 @@ from typing import Optional
 
 from app.core import cache
 from app.repositories import cliente_repo
-import filas
+from app.messaging import email_producer
 from app.dependencies import get_usuario_atual, exigir_admin
 from app.limiter import limiter
 from app.schemas.cliente_schemas import ClienteEntrada, ClienteAtualizacao
@@ -75,7 +75,7 @@ def criar(cliente: ClienteEntrada, usuario: dict = Depends(get_usuario_atual)):
         raise HTTPException(status_code=400, detail=str(erro))
 
     try:
-        filas.publicar_boas_vindas(novo_id, cliente.nome, cliente.email)
+        email_producer.publicar_boas_vindas(novo_id, cliente.nome, cliente.email)
     except Exception as erro:
         print(f"Não foi possível publicar na fila (cliente foi criado normalmente): {erro}")
 

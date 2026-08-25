@@ -1,10 +1,7 @@
 """
-filas.py
-========
-O nosso "PRODUCER" -- coloca mensagens na fila do RabbitMQ.
-
-Antes deste commit, RABBITMQ_HOST estava escrito DIRETO no código.
-Agora vem de app/core/config.py.
+app/messaging/email_producer.py
+=================================
+Produtor (Producer) responsável por publicar mensagens de e-mail na fila do RabbitMQ.
 """
 
 import json
@@ -16,7 +13,7 @@ FILA_BOAS_VINDAS = "fila_boas_vindas"
 
 
 def publicar_boas_vindas(cliente_id: int, nome: str, email: str) -> None:
-    """Coloca uma mensagem na fila, pedindo o envio do e-mail de boas-vindas depois."""
+    """Publica um evento na fila para processamento assíncrono do e-mail de boas-vindas."""
     conexao = pika.BlockingConnection(pika.ConnectionParameters(host=settings.rabbitmq_host))
     canal = conexao.channel()
     canal.queue_declare(queue=FILA_BOAS_VINDAS, durable=True)
