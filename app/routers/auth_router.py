@@ -12,8 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.core import security
-import usuarios_crud
-import refresh_tokens_crud
+from app.repositories import usuario_repo, refresh_token_repo
 from app.limiter import limiter
 from app.schemas.auth_schemas import RefreshRequest
 
@@ -27,7 +26,7 @@ def login(request: Request, form: OAuth2PasswordRequestForm = Depends()):
     POST /auth/login -> devolve access_token (15 min) e refresh_token (7 dias).
     RATE LIMIT: 5/minuto -- alvo primário de brute force.
     """
-    usuario = usuarios_crud.buscar_usuario_por_username(form.username)
+    usuario = usuario_repo.buscar_usuario_por_username(form.username)
     if usuario is None:
         raise HTTPException(status_code=401, detail="Usuário ou senha incorretos")
 
@@ -37,7 +36,7 @@ def login(request: Request, form: OAuth2PasswordRequestForm = Depends()):
 
     access_token = security.criar_access_token(username, papel)
     refresh_token, jti, expira_em = security.criar_refresh_token(username)
-    refresh_tokens_crud.salvar_refresh_token(usuario_id, jti, expira_em)
+    refresh_token_repo.salvar_refresh_token(usuario_id, jti, expira_em)
 
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
@@ -55,11 +54,11 @@ def refresh(request: Request, dados: RefreshRequest):
         raise HTTPException(status_code=401, detail="Tipo de token incorreto")
 
     jti = payload.get("jti")
-    if not refresh_tokens_crud.refresh_token_esta_ativo(jti):
+    if not refresh_token_repo.refresh_token_esta_ativo(jti):
         raise HTTPException(status_code=401, detail="Refresh token revogado ou não encontrado")
 
     username = payload.get("sub")
-    usuario = usuarios_crud.buscar_usuario_por_username(username)
+    usuario = usuario_repo.buscar_usuario_por_username(username)
     if usuario is None:
         raise HTTPException(status_code=401, detail="Usuário não encontrado")
 
@@ -78,6 +77,6 @@ def logout(dados: RefreshRequest):
 
     jti = payload.get("jti")
     if jti:
-        refresh_tokens_crud.revogar_refresh_token(jti)
+        refresh_token_repo.revogar_refresh_token(jti)
 
     return {"mensagem": "Logout realizado"}

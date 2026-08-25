@@ -5,7 +5,7 @@ Script de demonstração. Rode este arquivo para ver o cadastro
 de clientes funcionando na prática, passo a passo.
 """
 
-from crud import (
+from app.repositories.cliente_repo import (
     criar_cliente,
     listar_clientes,
     buscar_cliente_por_id,

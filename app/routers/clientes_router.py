@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 
 from app.core import cache
-import crud
+from app.repositories import cliente_repo
 import filas
 from app.dependencies import get_usuario_atual, exigir_admin
 from app.limiter import limiter
@@ -33,8 +33,8 @@ def listar(
     nome: Optional[str] = Query(None),
 ):
     offset = (pagina - 1) * tamanho_pagina
-    linhas = crud.listar_clientes(limite=tamanho_pagina, offset=offset, nome=nome)
-    total = crud.contar_clientes(nome=nome)
+    linhas = cliente_repo.listar_clientes(limite=tamanho_pagina, offset=offset, nome=nome)
+    total = cliente_repo.contar_clientes(nome=nome)
     clientes = [dict(zip(_COLUNAS, linha)) for linha in linhas]
 
     return {
@@ -52,7 +52,7 @@ def buscar(cliente_id: int, usuario: dict = Depends(get_usuario_atual)):
     if cliente_cacheado is not None:
         return {**cliente_cacheado, "_origem": "cache"}
 
-    linha = crud.buscar_cliente_por_id(cliente_id)
+    linha = cliente_repo.buscar_cliente_por_id(cliente_id)
     if linha is None:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
 
@@ -64,7 +64,7 @@ def buscar(cliente_id: int, usuario: dict = Depends(get_usuario_atual)):
 @router.post("", status_code=201)
 def criar(cliente: ClienteEntrada, usuario: dict = Depends(get_usuario_atual)):
     try:
-        novo_id = crud.criar_cliente(
+        novo_id = cliente_repo.criar_cliente(
             nome=cliente.nome,
             email=cliente.email,
             telefone=cliente.telefone,
@@ -84,7 +84,7 @@ def criar(cliente: ClienteEntrada, usuario: dict = Depends(get_usuario_atual)):
 
 @router.patch("/{cliente_id}")
 def atualizar(cliente_id: int, dados: ClienteAtualizacao, usuario: dict = Depends(get_usuario_atual)):
-    linhas_alteradas = crud.atualizar_cliente(
+    linhas_alteradas = cliente_repo.atualizar_cliente(
         cliente_id, nome=dados.nome, telefone=dados.telefone, endereco=dados.endereco,
     )
     if linhas_alteradas == 0:
@@ -97,7 +97,7 @@ def atualizar(cliente_id: int, dados: ClienteAtualizacao, usuario: dict = Depend
 @router.delete("/{cliente_id}")
 def deletar(cliente_id: int, usuario: dict = Depends(exigir_admin)):
     """Só ADMIN pode deletar (RBAC)."""
-    linhas_apagadas = crud.deletar_cliente(cliente_id)
+    linhas_apagadas = cliente_repo.deletar_cliente(cliente_id)
     if linhas_apagadas == 0:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
 

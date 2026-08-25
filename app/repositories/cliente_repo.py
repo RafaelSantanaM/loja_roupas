@@ -1,17 +1,25 @@
 """
-crud.py
-=======
-Aqui estão as 4 ações mágicas que dá pra fazer com uma fichinha de cliente:
-  C - Criar, R - Ler, U - Atualizar, D - Deletar
+app/repositories/cliente_repo.py
+==================================
+Repositório de acesso a dados da entidade Cliente.
+Executa operações de persistência (CRUD) diretamente no PostgreSQL.
 
-REGRA DE OURO DE SEGURANÇA: sempre parametrizado (%s), nunca montando
-SQL colando texto do usuário direto (SQL Injection).
+Segurança: Todas as consultas utilizam consultas parametrizadas (%s ou %(nome)s)
+para prevenir vulnerabilidades de SQL Injection.
 """
 
+from typing import Optional, Any
 from app.db.session import get_connection
 
 
-def criar_cliente(nome, email, telefone=None, data_nascimento=None, endereco=None):
+def criar_cliente(
+    nome: str,
+    email: str,
+    telefone: Optional[str] = None,
+    data_nascimento: Optional[str] = None,
+    endereco: Optional[str] = None,
+) -> int:
+    """Insere um novo cliente no banco e retorna seu ID gerado."""
     sql = """
         INSERT INTO clientes (nome, email, telefone, data_nascimento, endereco)
         VALUES (%s, %s, %s, %s, %s)
@@ -25,7 +33,12 @@ def criar_cliente(nome, email, telefone=None, data_nascimento=None, endereco=Non
     return novo_id
 
 
-def listar_clientes(limite=10, offset=0, nome=None):
+def listar_clientes(
+    limite: int = 10,
+    offset: int = 0,
+    nome: Optional[str] = None,
+) -> list[tuple[Any, ...]]:
+    """Lista clientes com suporte a paginação e filtro opcional por nome."""
     sql = """
         SELECT id, nome, email, telefone, data_nascimento, endereco, criado_em
         FROM clientes
@@ -39,7 +52,8 @@ def listar_clientes(limite=10, offset=0, nome=None):
             return cursor.fetchall()
 
 
-def contar_clientes(nome=None):
+def contar_clientes(nome: Optional[str] = None) -> int:
+    """Retorna o total de clientes cadastrados, com filtro opcional por nome."""
     sql = "SELECT COUNT(*) FROM clientes WHERE (%(nome)s IS NULL OR nome ILIKE '%%' || %(nome)s || '%%');"
     with get_connection() as conn:
         with conn.cursor() as cursor:
@@ -47,7 +61,8 @@ def contar_clientes(nome=None):
             return cursor.fetchone()[0]
 
 
-def buscar_cliente_por_id(cliente_id):
+def buscar_cliente_por_id(cliente_id: int) -> Optional[tuple[Any, ...]]:
+    """Busca um cliente específico por seu ID único."""
     sql = "SELECT id, nome, email, telefone, data_nascimento, endereco, criado_em FROM clientes WHERE id = %s;"
     with get_connection() as conn:
         with conn.cursor() as cursor:
@@ -55,7 +70,13 @@ def buscar_cliente_por_id(cliente_id):
             return cursor.fetchone()
 
 
-def atualizar_cliente(cliente_id, nome=None, telefone=None, endereco=None):
+def atualizar_cliente(
+    cliente_id: int,
+    nome: Optional[str] = None,
+    telefone: Optional[str] = None,
+    endereco: Optional[str] = None,
+) -> int:
+    """Atualiza campos específicos de um cliente. Retorna o número de linhas afetadas."""
     sql = """
         UPDATE clientes
         SET nome = COALESCE(%s, nome),
@@ -71,7 +92,8 @@ def atualizar_cliente(cliente_id, nome=None, telefone=None, endereco=None):
     return linhas_alteradas
 
 
-def deletar_cliente(cliente_id):
+def deletar_cliente(cliente_id: int) -> int:
+    """Remove um cliente pelo ID. Retorna o número de linhas afetadas."""
     sql = "DELETE FROM clientes WHERE id = %s;"
     with get_connection() as conn:
         with conn.cursor() as cursor:
