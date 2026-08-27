@@ -158,19 +158,32 @@ def test_buscar_cliente_inexistente_retorna_404(client, admin_token):
 # Refresh token
 # ---------------------------------------------------------
 
-def test_fluxo_refresh_token_emite_novo_access_token(client):
+def test_fluxo_refresh_token_com_rotacao(client):
+    """Valida Refresh Token Rotation: emite novos tokens e invalida o anterior."""
     resposta_login = client.post("/auth/login", data={"username": "gerente", "password": "senha123"})
-    refresh_token = resposta_login.json()["refresh_token"]
+    refresh_token_1 = resposta_login.json()["refresh_token"]
 
-    resposta_refresh = client.post("/auth/refresh", json={"refresh_token": refresh_token})
+    # 1. Primeiro refresh com sucesso
+    resposta_refresh_1 = client.post("/auth/refresh", json={"refresh_token": refresh_token_1})
+    assert resposta_refresh_1.status_code == 200
+    dados_refresh = resposta_refresh_1.json()
+    assert "access_token" in dados_refresh
+    assert "refresh_token" in dados_refresh
+    refresh_token_2 = dados_refresh["refresh_token"]
+    assert refresh_token_2 != refresh_token_1
 
-    assert resposta_refresh.status_code == 200
-    assert "access_token" in resposta_refresh.json()
+    # 2. Tentar reutilizar o refresh_token_1 deve falhar (Token Replay Attack prevenido)
+    resposta_reuso = client.post("/auth/refresh", json={"refresh_token": refresh_token_1})
+    assert resposta_reuso.status_code == 401
+
+    # 3. Usar o novo refresh_token_2 deve funcionar perfeitamente
+    resposta_refresh_2 = client.post("/auth/refresh", json={"refresh_token": refresh_token_2})
+    assert resposta_refresh_2.status_code == 200
+    assert "access_token" in resposta_refresh_2.json()
 
 
 def test_logout_revoga_refresh_token(client):
-    # Arrange: login novo, exclusivo pra esse teste (não reaproveita a fixture,
-    # porque vamos INVALIDAR esse refresh token, e não queremos afetar outros testes)
+    # Arrange: login novo, exclusivo pra esse teste
     resposta_login = client.post("/auth/login", data={"username": "gerente", "password": "senha123"})
     refresh_token = resposta_login.json()["refresh_token"]
 
@@ -183,3 +196,4 @@ def test_logout_revoga_refresh_token(client):
 
     # Assert: deve ser recusado, mesmo com assinatura JWT ainda matematicamente válida
     assert resposta_refresh.status_code == 401
+

@@ -23,6 +23,11 @@ from app.core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# Hash pré-calculado fixo utilizado para evitar timing attack / enumeração de usuários no login
+# Quando o usuário não existe no banco, executamos a verificação contra este hash para manter
+# o tempo de resposta em ~150-250ms (idêntico ao caso de usuário existente com senha errada).
+DUMMY_BCRYPT_HASH = "$2b$12$wO7xteNxqWiSyVZayFNhkOIzUABlSjlzVztFyBclPJ4C5OX6vU5zK"
+
 
 def gerar_hash_senha(senha_pura: str) -> str:
     """Transforma a senha digitada num hash irreversível."""

@@ -25,9 +25,12 @@ def login(request: Request, form: OAuth2PasswordRequestForm = Depends()):
     """
     POST /auth/login -> devolve access_token (15 min) e refresh_token (7 dias).
     RATE LIMIT: 5/minuto -- alvo primário de brute force.
+    PROTEÇÃO: Mitigação contra Timing Attack (User Enumeration) via dummy bcrypt verify.
     """
     usuario = usuario_repo.buscar_usuario_por_username(form.username)
     if usuario is None:
+        # Executa verificação fictícia para manter o tempo de resposta em ~150-250ms
+        security.conferir_senha(form.password, security.DUMMY_BCRYPT_HASH)
         raise HTTPException(status_code=401, detail="Usuário ou senha incorretos")
 
     usuario_id, username, senha_hash, papel = usuario
@@ -44,7 +47,10 @@ def login(request: Request, form: OAuth2PasswordRequestForm = Depends()):
 @router.post("/refresh")
 @limiter.limit("10/minute")
 def refresh(request: Request, dados: RefreshRequest):
-    """POST /auth/refresh -> troca um refresh token válido por um access token novo."""
+    """
+    POST /auth/refresh -> troca um refresh token válido por um novo par (Refresh Token Rotation).
+    O token anterior é imediatamente revogado para evitar ataques de repetição (Token Replay Attacks).
+    """
     try:
         payload = security.verificar_token(dados.refresh_token)
     except ValueError:
@@ -62,9 +68,21 @@ def refresh(request: Request, dados: RefreshRequest):
     if usuario is None:
         raise HTTPException(status_code=401, detail="Usuário não encontrado")
 
-    _, _, _, papel = usuario
+    usuario_id, _, _, papel = usuario
+
+    # 1. Revoga o token atual (princípio de uso único por ciclo)
+    refresh_token_repo.revogar_refresh_token(jti)
+
+    # 2. Emite novo access_token e novo refresh_token
     novo_access_token = security.criar_access_token(username, papel)
-    return {"access_token": novo_access_token, "token_type": "bearer"}
+    novo_refresh_token, novo_jti, novo_expira_em = security.criar_refresh_token(username)
+    refresh_token_repo.salvar_refresh_token(usuario_id, novo_jti, novo_expira_em)
+
+    return {
+        "access_token": novo_access_token,
+        "refresh_token": novo_refresh_token,
+        "token_type": "bearer",
+    }
 
 
 @router.post("/logout")
