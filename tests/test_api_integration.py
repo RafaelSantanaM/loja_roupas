@@ -197,3 +197,35 @@ def test_logout_revoga_refresh_token(client):
     # Assert: deve ser recusado, mesmo com assinatura JWT ainda matematicamente válida
     assert resposta_refresh.status_code == 401
 
+
+# ---------------------------------------------------------
+# Observabilidade & Health Check
+# ---------------------------------------------------------
+
+def test_health_check_retorna_status_200_e_servicos_saudaveis(client):
+    """Verifica se o endpoint GET /health checa ativamente Postgres, Redis e RabbitMQ."""
+    resposta = client.get("/health")
+    assert resposta.status_code == 200
+    dados = resposta.json()
+    assert dados["status"] == "healthy"
+    assert dados["servicos"]["postgres"] == "ok"
+    assert dados["servicos"]["redis"] == "ok"
+    assert dados["servicos"]["rabbitmq"] == "ok"
+
+
+def test_middleware_injeta_x_request_id_na_resposta(client):
+    """Verifica se cada resposta HTTP carrega o correlation ID (X-Request-ID)."""
+    resposta = client.get("/")
+    assert resposta.status_code == 200
+    assert "x-request-id" in resposta.headers
+    assert len(resposta.headers["x-request-id"]) > 0
+
+
+def test_middleware_preserva_x_request_id_enviado_pelo_cliente(client):
+    """Se o cliente enviar um correlation ID customizado, a API deve preservá-lo."""
+    custom_id = "correlation-trace-12345"
+    resposta = client.get("/", headers={"X-Request-ID": custom_id})
+    assert resposta.status_code == 200
+    assert resposta.headers.get("x-request-id") == custom_id
+
+

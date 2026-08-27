@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 
 from app.core import cache
+from app.core.logger import logger
 from app.repositories import cliente_repo
 from app.messaging import email_producer
 from app.dependencies import get_usuario_atual, exigir_admin
@@ -77,7 +78,7 @@ def criar(cliente: ClienteEntrada, usuario: dict = Depends(get_usuario_atual)):
     try:
         email_producer.publicar_boas_vindas(novo_id, cliente.nome, cliente.email)
     except Exception as erro:
-        print(f"Não foi possível publicar na fila (cliente foi criado normalmente): {erro}")
+        logger.warning(f"Não foi possível publicar na fila (cliente foi criado normalmente): {erro}")
 
     return {"id": novo_id, "mensagem": "Cliente criado com sucesso"}
 

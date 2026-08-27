@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.core import cache
+from app.core.logger import logger
 from app.dependencies import get_usuario_atual
 from app.limiter import limiter
 from app.messaging import email_producer
@@ -67,7 +68,7 @@ def criar_pedido(
         )
     except Exception as erro_fila:
         # Se a fila falhar, a transação bancária já foi salva com sucesso; não quebramos o checkout
-        print(f"[Aviso] Falha ao publicar confirmação de pedido na fila RabbitMQ: {erro_fila}")
+        logger.warning(f"Falha ao publicar confirmação de pedido na fila RabbitMQ: {erro_fila}")
 
     return {
         "id": pedido_id,
