@@ -18,6 +18,7 @@ GRANT USAGE, SELECT ON SEQUENCE usuarios_id_seq TO app_loja;
 -- Usuários padrão para testes e desenvolvimento (senha: 'senha123')
 INSERT INTO usuarios (username, senha_hash, papel)
 VALUES 
-    ('gerente', '$2b$12$K1rZc0Jt8iVv42aN5zZ3m.r6Y4n/2uT5X7g5b6C7d8e9f0a1b2c3d', 'admin'),
-    ('vendedor', '$2b$12$K1rZc0Jt8iVv42aN5zZ3m.r6Y4n/2uT5X7g5b6C7d8e9f0a1b2c3d', 'funcionario')
+    ('gerente', '$2b$12$x7a3NfD5y2i2.vqsj9zwvevB.LrooJgAMGEUveD76GJ8.YTHaD7Sq', 'admin'),
+    ('vendedor', '$2b$12$x7a3NfD5y2i2.vqsj9zwvevB.LrooJgAMGEUveD76GJ8.YTHaD7Sq', 'funcionario')
 ON CONFLICT (username) DO NOTHING;
+
