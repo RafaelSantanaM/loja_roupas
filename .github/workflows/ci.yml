@@ -1,6 +1,5 @@
 name: CI Pipeline - Loja de Roupas
 
-# Quando esse robô vai rodar?
 on:
   push:
     branches: [ "main" ]
@@ -9,23 +8,93 @@ on:
 
 jobs:
   testes:
-    runs-on: ubuntu-latest # O servidor gratuito do GitHub que vai rodar o código
+    name: Testes Automatizados & Integridade
+    runs-on: ubuntu-latest
+
+    # Orquestração de serviços reais (PostgreSQL, Redis e RabbitMQ) no runner do GitHub
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: loja_roupas
+          POSTGRES_USER: usuario_loja
+          POSTGRES_PASSWORD: senha_segura_123
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
-    - name: 1. Pegar o código do repositório
-      uses: actions/checkout@v3
+      - name: 1. Checkout do Código
+        uses: actions/checkout@v4
 
-    - name: 2. Configurar o Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11' # Mude para a versão que você usa na sua máquina
+      - name: 2. Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
 
-    - name: 3. Instalar as dependências
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest httpx # Garantindo que as libs de teste estão instaladas
+      - name: 3. Instalar Cliente PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
 
-    - name: 4. Rodar os testes automatizados
-      run: |
-        pytest -v
+      - name: 4. Instalar Dependências Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest httpx
+
+      - name: 5. Executar Migrations do Banco de Dados
+        env:
+          PGPASSWORD: senha_segura_123
+        run: |
+          echo "Aplicando schemas e permissões SQL no PostgreSQL..."
+          for migration in $(ls app/db/migrations/*.sql | sort); do
+            echo "--> Rodando $migration"
+            psql -h localhost -p 5432 -U usuario_loja -d loja_roupas -f "$migration"
+          done
+
+      - name: 6. Executar Suite de Testes (Pytest)
+        env:
+          INSTANCE_NAME: ci-runner
+          JWT_SECRET_KEY: ci-super-secret-key-para-validacao-no-github-actions-12345
+          JWT_ALGORITMO: HS256
+          MINUTOS_ACCESS_TOKEN: 15
+          DIAS_REFRESH_TOKEN: 7
+          ORIGENS_PERMITIDAS: '["http://localhost:3000"]'
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: loja_roupas
+          DB_USER: usuario_loja
+          DB_PASSWORD: senha_segura_123
+          DB_SSLMODE: disable
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          CACHE_TTL_SEGUNDOS: 300
+          RABBITMQ_HOST: localhost
+        run: |
+          pytest -v
