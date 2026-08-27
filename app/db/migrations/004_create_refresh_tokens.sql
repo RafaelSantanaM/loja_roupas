@@ -15,4 +15,5 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_jti ON refresh_tokens (jti);
 
 GRANT SELECT, INSERT, UPDATE ON refresh_tokens TO app_loja;
-GRANT USAGE, SELECT ON SEQUENCE refresh_tokens_id_seq TO app_loja;
+GRANT USAGE, SELECT, UPDATE ON SEQUENCE refresh_tokens_id_seq TO app_loja;
+

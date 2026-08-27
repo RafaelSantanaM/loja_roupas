@@ -23,10 +23,14 @@ CREATE INDEX IF NOT EXISTS idx_pedidos_cliente ON pedidos (cliente_id);
 CREATE INDEX IF NOT EXISTS idx_pedidos_produto ON pedidos (produto_id);
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON produtos, pedidos TO app_loja;
-GRANT USAGE, SELECT ON SEQUENCE produtos_id_seq TO app_loja;
-GRANT USAGE, SELECT ON SEQUENCE pedidos_id_seq TO app_loja;
+GRANT USAGE, SELECT, UPDATE ON SEQUENCE produtos_id_seq TO app_loja;
+GRANT USAGE, SELECT, UPDATE ON SEQUENCE pedidos_id_seq TO app_loja;
 
 -- Insere produto inicial caso não exista
 INSERT INTO produtos (id, nome, preco, estoque)
 VALUES (1, 'Camiseta Branca', 49.90, 10)
 ON CONFLICT (id) DO NOTHING;
+
+-- Sincroniza a sequência do PostgreSQL para o próximo ID livre
+SELECT setval('produtos_id_seq', (SELECT MAX(id) FROM produtos));
+

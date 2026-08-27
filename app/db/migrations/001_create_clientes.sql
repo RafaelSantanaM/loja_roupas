@@ -26,4 +26,5 @@ $$;
 
 GRANT CONNECT ON DATABASE loja_roupas TO app_loja;
 GRANT SELECT, INSERT, UPDATE, DELETE ON clientes TO app_loja;
-GRANT USAGE, SELECT ON SEQUENCE clientes_id_seq TO app_loja;
+GRANT USAGE, SELECT, UPDATE ON SEQUENCE clientes_id_seq TO app_loja;
+

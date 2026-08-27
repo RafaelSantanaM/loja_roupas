@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
 );
 
 GRANT SELECT, INSERT, UPDATE ON usuarios TO app_loja;
-GRANT USAGE, SELECT ON SEQUENCE usuarios_id_seq TO app_loja;
+GRANT USAGE, SELECT, UPDATE ON SEQUENCE usuarios_id_seq TO app_loja;
+
 
 -- Usuários padrão para testes e desenvolvimento (senha: 'senha123')
 INSERT INTO usuarios (username, senha_hash, papel)
