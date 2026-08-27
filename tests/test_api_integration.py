@@ -17,8 +17,9 @@ com o cuidado de:
 """
 
 import uuid
-
 import pytest
+
+from app.db.session import get_connection
 
 
 def _email_unico() -> str:
@@ -227,5 +228,203 @@ def test_middleware_preserva_x_request_id_enviado_pelo_cliente(client):
     resposta = client.get("/", headers={"X-Request-ID": custom_id})
     assert resposta.status_code == 200
     assert resposta.headers.get("x-request-id") == custom_id
+
+
+# ---------------------------------------------------------
+# Domínio: Produtos (Catálogo, Cache Redis & RBAC)
+# ---------------------------------------------------------
+
+def test_funcionario_pode_listar_produtos(client, funcionario_token):
+    """Qualquer usuário autenticado (incluindo funcionários) pode consultar o catálogo."""
+    headers = {"Authorization": f"Bearer {funcionario_token}"}
+    resposta = client.get("/produtos", headers=headers)
+    assert resposta.status_code == 200
+    dados = resposta.json()
+    assert "produtos" in dados
+    assert "total_de_produtos" in dados
+
+
+def test_funcionario_nao_pode_criar_produto(client, funcionario_token):
+    """Apenas administradores podem cadastrar novos produtos (RBAC: 403 Forbidden)."""
+    headers = {"Authorization": f"Bearer {funcionario_token}"}
+    resposta = client.post(
+        "/produtos",
+        headers=headers,
+        json={"nome": "Vestido Floral", "preco": 129.90, "estoque": 5},
+    )
+    assert resposta.status_code == 403
+
+
+def test_ciclo_produto_com_cache_redis_e_rbac(client, admin_token):
+    """Valida CRUD de produto por admin, cache miss (banco), cache hit (redis) e invalidação."""
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # 1. CREATE (Admin)
+    resposta_create = client.post(
+        "/produtos",
+        headers=headers,
+        json={"nome": "Jaqueta Jeans Pytest", "preco": 199.90, "estoque": 12},
+    )
+    assert resposta_create.status_code == 201
+    produto_id = resposta_create.json()["id"]
+
+    # 2. READ 1: Primeira leitura busca no Banco e popula o Redis (Cache Miss)
+    resposta_read1 = client.get(f"/produtos/{produto_id}", headers=headers)
+    assert resposta_read1.status_code == 200
+    assert resposta_read1.json()["_origem"] == "banco"
+    assert resposta_read1.json()["nome"] == "Jaqueta Jeans Pytest"
+
+    # 3. READ 2: Segunda leitura vem direto do Redis (Cache Hit)
+    resposta_read2 = client.get(f"/produtos/{produto_id}", headers=headers)
+    assert resposta_read2.status_code == 200
+    assert resposta_read2.json()["_origem"] == "cache"
+
+    # 4. UPDATE: Atualização deve invalidar a chave no Redis
+    resposta_update = client.patch(
+        f"/produtos/{produto_id}",
+        headers=headers,
+        json={"preco": 179.90, "estoque": 25},
+    )
+    assert resposta_update.status_code == 200
+
+    # 5. READ 3: Leitura após update busca dados atualizados no Banco (Cache Miss novamente)
+    resposta_read3 = client.get(f"/produtos/{produto_id}", headers=headers)
+    assert resposta_read3.status_code == 200
+    assert resposta_read3.json()["_origem"] == "banco"
+    assert float(resposta_read3.json()["preco"]) == 179.90
+    assert resposta_read3.json()["estoque"] == 25
+
+    # 6. DELETE: Cleanup e invalidação
+    resposta_delete = client.delete(f"/produtos/{produto_id}", headers=headers)
+    assert resposta_delete.status_code == 200
+
+    # 7. READ 4: Não deve mais existir (404)
+    resposta_read4 = client.get(f"/produtos/{produto_id}", headers=headers)
+    assert resposta_read4.status_code == 404
+
+
+# ---------------------------------------------------------
+# Domínio: Pedidos (Checkout ACID, Concorrência & Estoque)
+# ---------------------------------------------------------
+
+def test_checkout_pedido_com_sucesso_debita_estoque(client, admin_token, funcionario_token):
+    """Valida compra com sucesso, cálculo correto do valor total e débito atômico de estoque."""
+    headers_admin = {"Authorization": f"Bearer {admin_token}"}
+    headers_func = {"Authorization": f"Bearer {funcionario_token}"}
+
+    # 1. Arrange: Cria cliente e produto de teste
+    res_cli = client.post(
+        "/clientes",
+        headers=headers_admin,
+        json={"nome": "Cliente Checkout", "email": _email_unico()},
+    )
+    cliente_id = res_cli.json()["id"]
+
+    res_prod = client.post(
+        "/produtos",
+        headers=headers_admin,
+        json={"nome": "Calça Alfaiataria Pytest", "preco": 150.00, "estoque": 10},
+    )
+    produto_id = res_prod.json()["id"]
+
+    try:
+        # 2. Act: Realiza pedido de 3 unidades
+        res_pedido = client.post(
+            "/pedidos",
+            headers=headers_func,
+            json={"cliente_id": cliente_id, "produto_id": produto_id, "quantidade": 3},
+        )
+        assert res_pedido.status_code == 201
+        dados_pedido = res_pedido.json()
+        assert dados_pedido["quantidade"] == 3
+        assert float(dados_pedido["valor_total"]) == 450.00
+        pedido_id = dados_pedido["id"]
+
+        # 3. Assert: Estoque do produto deve ter caído de 10 para 7
+        res_prod_atual = client.get(f"/produtos/{produto_id}", headers=headers_admin)
+        assert res_prod_atual.status_code == 200
+        assert res_prod_atual.json()["estoque"] == 7
+
+        # 4. Assert: Busca pedido por ID
+        res_get_ped = client.get(f"/pedidos/{pedido_id}", headers=headers_func)
+        assert res_get_ped.status_code == 200
+        assert res_get_ped.json()["id"] == pedido_id
+
+        # 5. Assert: Tentar deletar o produto com pedido associado deve falhar (400)
+        res_del_prod_fail = client.delete(f"/produtos/{produto_id}", headers=headers_admin)
+        assert res_del_prod_fail.status_code == 400
+        assert "histórico de pedidos" in res_del_prod_fail.json()["detail"]
+
+    finally:
+        # Cleanup: Remove primeiro o pedido da tabela 'pedidos' para liberar as FKs
+        if "pedido_id" in locals() and pedido_id:
+            with get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM pedidos WHERE id = %s;", (pedido_id,))
+                conn.commit()
+
+        client.delete(f"/produtos/{produto_id}", headers=headers_admin)
+        client.delete(f"/clientes/{cliente_id}", headers=headers_admin)
+
+
+def test_checkout_rejeita_pedido_com_estoque_insuficiente(client, admin_token, funcionario_token):
+    """Garante integridade ACID: Se o estoque for menor que o pedido, a compra é rejeitada e o estoque não muda."""
+    headers_admin = {"Authorization": f"Bearer {admin_token}"}
+    headers_func = {"Authorization": f"Bearer {funcionario_token}"}
+
+    res_cli = client.post(
+        "/clientes",
+        headers=headers_admin,
+        json={"nome": "Cliente Estoque Zero", "email": _email_unico()},
+    )
+    cliente_id = res_cli.json()["id"]
+
+    res_prod = client.post(
+        "/produtos",
+        headers=headers_admin,
+        json={"nome": "Shorts Praia Pytest", "preco": 80.00, "estoque": 2},
+    )
+    produto_id = res_prod.json()["id"]
+
+    try:
+        # Tenta comprar 5 unidades (só temos 2)
+        res_pedido = client.post(
+            "/pedidos",
+            headers=headers_func,
+            json={"cliente_id": cliente_id, "produto_id": produto_id, "quantidade": 5},
+        )
+        assert res_pedido.status_code == 400
+        assert "Estoque insuficiente" in res_pedido.json()["detail"]
+
+        # Verifica que o estoque continuou exatamente 2 (Rollback da transação)
+        res_prod_atual = client.get(f"/produtos/{produto_id}", headers=headers_admin)
+        assert res_prod_atual.json()["estoque"] == 2
+
+    finally:
+        client.delete(f"/produtos/{produto_id}", headers=headers_admin)
+        client.delete(f"/clientes/{cliente_id}", headers=headers_admin)
+
+
+def test_checkout_rejeita_entidades_inexistentes(client, funcionario_token):
+    """Retorna 404 ao tentar checkout com cliente ou produto que não existe."""
+    headers = {"Authorization": f"Bearer {funcionario_token}"}
+
+    # Cliente inexistente
+    res1 = client.post(
+        "/pedidos",
+        headers=headers,
+        json={"cliente_id": 9999999, "produto_id": 1, "quantidade": 1},
+    )
+    assert res1.status_code == 404
+
+    # Produto inexistente
+    res2 = client.post(
+        "/pedidos",
+        headers=headers,
+        json={"cliente_id": 1, "produto_id": 9999999, "quantidade": 1},
+    )
+    assert res2.status_code == 404
+
+
 
 

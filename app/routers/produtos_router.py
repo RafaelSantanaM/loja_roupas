@@ -109,7 +109,14 @@ def deletar_produto(
     usuario: dict = Depends(exigir_admin),
 ):
     """Remove um produto do catálogo e invalida o cache (Apenas Administradores)."""
-    linhas_apagadas = produto_repo.deletar_produto(produto_id)
+    try:
+        linhas_apagadas = produto_repo.deletar_produto(produto_id)
+    except Exception as erro:
+        raise HTTPException(
+            status_code=400,
+            detail="Não é possível excluir produto com histórico de pedidos vinculados.",
+        )
+
     if linhas_apagadas == 0:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
 
