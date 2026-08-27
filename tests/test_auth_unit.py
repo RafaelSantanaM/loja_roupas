@@ -55,11 +55,12 @@ def test_refresh_token_gera_jti_unico_a_cada_chamada():
     assert jti1 != jti2
 
 
+import pytest
+
+
 def test_verificar_token_rejeita_token_adulterado():
     token = criar_access_token("usuario_teste", "admin")
-    token_adulterado = token[:-1] + ("A" if token[-1] != "A" else "B")
-    try:
+    token_adulterado = token[:-5] + "XXXXX"
+    with pytest.raises(ValueError, match="Token inválido ou expirado"):
         verificar_token(token_adulterado)
-        assert False, "Deveria ter levantado ValueError para token adulterado"
-    except ValueError:
-        pass
+

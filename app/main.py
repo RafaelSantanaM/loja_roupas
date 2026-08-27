@@ -19,7 +19,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import settings
 from app.limiter import limiter
-from app.routers import auth_router, clientes_router, produtos_router
+from app.routers import auth_router, clientes_router, produtos_router, pedidos_router
 
 app = FastAPI(title="Loja de Roupas - Enterprise API")
 
@@ -41,6 +41,7 @@ app.add_middleware(
 app.include_router(auth_router.router)
 app.include_router(clientes_router.router)
 app.include_router(produtos_router.router)
+app.include_router(pedidos_router.router)
 
 
 @app.get("/")
