@@ -10,8 +10,9 @@
 [![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 [![RabbitMQ](https://img.shields.io/badge/RabbitMQ-3-FF6600?logo=rabbitmq&logoColor=white)](https://www.rabbitmq.com/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
-[![Pytest](https://img.shields.io/badge/Pytest-27_Passed-0A9EDC?logo=pytest&logoColor=white)](https://docs.pytest.org/)
+[![Pytest](https://img.shields.io/badge/Pytest-29_Passed-0A9EDC?logo=pytest&logoColor=white)](https://docs.pytest.org/)
 [![CI Pipeline](https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](https://github.com/)
+[![Security](https://img.shields.io/badge/Security-OWASP_Top_10_Compliant-success?logo=shield&logoColor=white)](./docs/06-cybersecurity-hardening.md)
 
 </div>
 
@@ -27,7 +28,7 @@ graph TD
     LB --> RateLimit[SlowAPI - Rate Limiting & Throttling]
     
     subgraph FastAPI Application
-        RateLimit --> Middleware[Middleware: Correlation ID X-Request-ID & Logging]
+        RateLimit --> Middleware[Middleware: Correlation ID + Security Headers + Logging]
         Middleware --> Routers[Routers: /auth, /clientes, /produtos, /pedidos, /health]
         Routers --> Security[Core Security: JWT + RBAC + BCrypt + Dummy Hash]
         Routers --> Config[Core Config: Pydantic Settings]
@@ -49,14 +50,17 @@ graph TD
 * ⚡ **Cache-Aside com Invalidação Ativa (Redis)**: Leitura acelerada de catálogo de produtos e clientes via cache em memória com tempo de vida (*TTL*). Mutações (`POST`, `PATCH` ou `DELETE`) e checkouts de pedidos invalidam instantaneamente as chaves correspondentes no Redis, eliminando dados desatualizados (*stale cache*).
 * 🔒 **Transações ACID com Trava Pessimista (`SELECT FOR UPDATE`)**: No checkout de pedidos (`/pedidos`), o PostgreSQL bloqueia a linha da peça no estoque a nível de registro durante a transação, impedindo que dois clientes comprem o último item simultaneamente (*race conditions* / *overselling*).
 * 📬 **Mensageria Assíncrona & Workers (RabbitMQ + Pika)**: O envio de e-mails de boas-vindas e comprovantes de compra ocorre de forma totalmente desacoplada. A API responde ao cliente em milissegundos e enfileira o evento para processamento em background pelo worker.
-* 🛡️ **Segurança Ofensiva & Blindagem de Autenticação**:
-  * **Mitigação de Timing Attack**: Uso de *dummy hash* fixo na memória para manter o tempo de resposta constante (~250ms) no login, impossibilitando a enumeração de nomes de usuários válidos por cronometria.
-  * **Refresh Token Rotation**: Cada ciclo de renovação em `/auth/refresh` revoga o token anterior e emite um par novo de tokens, prevenindo ataques de repetição (*Token Replay Attacks*).
-  * **RBAC (*Role-Based Access Control*)**: Controle de acesso granular onde administradores gerenciam catálogo e cadastros, enquanto funcionários realizam vendas e consultas.
+* 🛡️ **Cibersegurança & Hardening Corporativo (OWASP, NIST & CIS)**:
+  * **OWASP Security Headers**: Injeção automática de `HSTS` (RFC 6797), `X-Content-Type-Options: nosniff` (RFC 7231), `X-Frame-Options: DENY` (anti-clickjacking), `Referrer-Policy` e `X-XSS-Protection`.
+  * **Mitigação de Timing Attack (CWE-208 / NIST SP 800-63B)**: Uso de *dummy hash* fixo na memória para manter o tempo de resposta constante (~250ms) no login, impossibilitando a enumeração de usuários válidos por cronometria.
+  * **Refresh Token Rotation (RFC 6749 / RFC 6819)**: Cada ciclo de renovação em `/auth/refresh` revoga o token anterior e emite um par novo de tokens, prevenindo ataques de repetição (*Token Replay Attacks*).
+  * **Sanitização de Exceções de Banco (CWE-209)**: Eliminação de stack traces ou metadados de driver expostos ao cliente externo.
+  * **Container Security (CIS Docker Benchmarks)**: Execução com usuário sem privilégios (`USER appuser`) no Dockerfile e conexão de menor privilégio (`DB_USER: app_loja`).
 * 📊 **Observabilidade & Health Check Ativo**:
   * **Correlation ID (`X-Request-ID`)**: Rastreabilidade ponta a ponta em cada requisição HTTP e nos registros do log estruturado.
-  * **Endpoint `/health`**: Sondagem ativa de prontidão e vivacidade (*liveness/readiness probes*) testando conectividade real com PostgreSQL, Redis e RabbitMQ.
-* 🧪 **CI/CD com Service Containers Reais (GitHub Actions)**: Pipeline que inicializa containers reais de banco, cache e mensageria, executa as migrations SQL sequenciais e roda a suíte de 27 testes automatizados.
+  * **Endpoint `/health`**: Sondagem ativa de prontidão e vivacidade (*liveness/readiness probes*) testando conectividade real com PostgreSQL, Redis e RabbitMQ com proteção de rate limit.
+* 🧪 **CI/CD com Service Containers Reais (GitHub Actions)**: Pipeline que inicializa containers reais de banco, cache e mensageria, executa as migrations SQL sequenciais e roda a suíte de 29 testes automatizados.
+
 
 ---
 
@@ -116,21 +120,21 @@ Após iniciar os containers, acesse a documentação interativa:
 
 | Domínio | Método | Endpoint | Descrição | Acesso / RBAC | Rate Limit |
 |---|---|---|---|---|---|
-| **Observabilidade** | `GET` | `/health` | Checagem ativa de saúde (Postgres, Redis, RabbitMQ) | Público | — |
+| **Observabilidade** | `GET` | `/health` | Checagem ativa de saúde (Postgres, Redis, RabbitMQ) | Público | 30 req/min |
 | **Observabilidade** | `GET` | `/` | Confirmação de status e instância ativa | Público | — |
 | **Autenticação** | `POST` | `/auth/login` | Login com proteção anti-timing attack (Dummy Hash) | Público | 5 req/min |
 | **Autenticação** | `POST` | `/auth/refresh` | Rotação de Refresh Token e emissão de novo Access Token | Público | 10 req/min |
-| **Autenticação** | `POST` | `/auth/logout` | Revogação ativa de sessão no banco | Autenticado | — |
+| **Autenticação** | `POST` | `/auth/logout` | Revogação ativa de sessão no banco | Autenticado | 15 req/min |
 | **Clientes** | `GET` | `/clientes` | Listagem paginada e filtrável de clientes | Autenticado | 60 req/min |
 | **Clientes** | `GET` | `/clientes/{id}` | Busca de cliente com cache Redis | Autenticado | — |
-| **Clientes** | `POST` | `/clientes` | Cadastro de cliente e publicação na fila AMQP | Autenticado | — |
-| **Clientes** | `PATCH` | `/clientes/{id}` | Atualização parcial e invalidação de cache | Autenticado | — |
-| **Clientes** | `DELETE` | `/clientes/{id}` | Remoção de cliente e invalidação de cache | **Apenas Admin** | — |
+| **Clientes** | `POST` | `/clientes` | Cadastro de cliente e publicação na fila AMQP | Autenticado | 30 req/min |
+| **Clientes** | `PATCH` | `/clientes/{id}` | Atualização parcial e invalidação de cache | Autenticado | 30 req/min |
+| **Clientes** | `DELETE` | `/clientes/{id}` | Remoção de cliente e invalidação de cache | **Apenas Admin** | 30 req/min |
 | **Produtos** | `GET` | `/produtos` | Listagem paginada do catálogo de roupas | Autenticado | 60 req/min |
 | **Produtos** | `GET` | `/produtos/{id}` | Detalhes da peça com cache Redis | Autenticado | — |
-| **Produtos** | `POST` | `/produtos` | Cadastro de nova peça no catálogo | **Apenas Admin** | — |
-| **Produtos** | `PATCH` | `/produtos/{id}` | Atualização de preço/estoque e invalidação de cache | **Apenas Admin** | — |
-| **Produtos** | `DELETE` | `/produtos/{id}` | Remoção de peça (com integridade referencial) | **Apenas Admin** | — |
+| **Produtos** | `POST` | `/produtos` | Cadastro de nova peça no catálogo | **Apenas Admin** | 30 req/min |
+| **Produtos** | `PATCH` | `/produtos/{id}` | Atualização de preço/estoque e invalidação de cache | **Apenas Admin** | 30 req/min |
+| **Produtos** | `DELETE` | `/produtos/{id}` | Remoção de peça (com integridade referencial) | **Apenas Admin** | 30 req/min |
 | **Pedidos** | `POST` | `/pedidos` | Checkout com trava pessimista (SELECT FOR UPDATE) | Autenticado | 20 req/min |
 | **Pedidos** | `GET` | `/pedidos` | Histórico paginado de compras | Autenticado | 60 req/min |
 | **Pedidos** | `GET` | `/pedidos/{id}` | Detalhes de um pedido específico | Autenticado | — |
@@ -139,7 +143,7 @@ Após iniciar os containers, acesse a documentação interativa:
 
 ## 🧪 Executando os Testes Automatizados
 
-Para rodar a suíte completa de testes unitários e de integração:
+Para rodar a suíte completa de testes unitários, de integração e de cibersegurança:
 
 ```bash
 # Ative o ambiente virtual e execute o pytest
@@ -185,20 +189,21 @@ loja_roupas/
 │   │   └── email_worker.py
 │   ├── dependencies.py            # Injeção de dependências (OAuth2 & RBAC)
 │   ├── limiter.py                 # Rate Limiter configurado (SlowAPI)
-│   └── main.py                    # Middleware de rastreabilidade e montagem do FastAPI
+│   └── main.py                    # Middleware com OWASP Security Headers e Correlation ID
 ├── docs/                          # Guias conceituais e base de conhecimento
 │   ├── 01-modelagem-e-transacoes.md
 │   ├── 02-autenticacao-jwt.md
 │   ├── 03-rbac-autorizacao.md
 │   ├── 04-testes-automatizados.md
 │   ├── 05-roadmap-backend.md
+│   ├── 06-cybersecurity-hardening.md # Guia de Cibersegurança & OWASP/NIST
 │   └── README.md
-├── tests/                         # Suíte de 27 testes automatizados
+├── tests/                         # Suíte de 29 testes automatizados
 │   ├── conftest.py                # Fixtures globais do Pytest
 │   ├── test_auth_unit.py          # Testes unitários de segurança
-│   └── test_api_integration.py    # Testes de integração de endpoints
+│   └── test_api_integration.py    # Testes de integração de endpoints e cibersegurança
 ├── docker-compose.yml             # Orquestração completa de 5 serviços
-├── Dockerfile                     # Imagem Docker otimizada
+├── Dockerfile                     # Imagem Docker com Non-Root User
 ├── requirements.txt               # Dependências do projeto
 └── README.md                      # Documentação técnica principal
 ```

@@ -13,6 +13,8 @@ Bem-vindo à base de conhecimento do projeto **Loja de Roupas API**. Esta pasta 
 | [**`03-rbac-autorizacao.md`**](./03-rbac-autorizacao.md) | Controle de Acesso Baseado em Papéis | RBAC, Roles (`admin` vs `funcionario`), Políticas de permissão em rotas |
 | [**`04-testes-automatizados.md`**](./04-testes-automatizados.md) | Testes com Pytest | Testes Unitários vs Testes de Integração, Fixtures do Pytest, TestClient |
 | [**`05-roadmap-backend.md`**](./05-roadmap-backend.md) | Trilha de Conhecimento Pleno/Sênior | System Design, Cache com Redis, Filas com RabbitMQ, CI/CD Pipelines |
+| [**`06-cybersecurity-hardening.md`**](./06-cybersecurity-hardening.md) | Cibersegurança & Hardening (OWASP/NIST) | Defesa em Profundidade, Headers HTTP (HSTS, X-Frame), Anti-Timing Attack, Rate Limiting, CIS Docker |
+
 
 ---
 
