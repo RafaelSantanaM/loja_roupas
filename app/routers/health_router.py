@@ -6,7 +6,7 @@ Testa a conectividade real com PostgreSQL, Redis e RabbitMQ.
 """
 
 from datetime import datetime, timezone
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 import pika
 
@@ -14,12 +14,14 @@ from app.core import cache
 from app.core.config import settings
 from app.core.logger import logger
 from app.db.session import get_connection
+from app.limiter import limiter
 
 router = APIRouter(tags=["Observabilidade"])
 
 
 @router.get("/health")
-def health_check():
+@limiter.limit("30/minute")
+def health_check(request: Request):
     """
     Verifica a saúde ativa das três dependências fundamentais da infraestrutura:
     1. PostgreSQL (banco relacional)

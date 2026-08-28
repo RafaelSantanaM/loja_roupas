@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.core import cache
+from app.core.logger import logger
 from app.repositories import produto_repo
 from app.dependencies import get_usuario_atual, exigir_admin
 from app.limiter import limiter
@@ -66,7 +67,9 @@ def buscar_produto(
 
 
 @router.post("", status_code=201)
+@limiter.limit("30/minute")
 def criar_produto(
+    request: Request,
     dados: ProdutoEntrada,
     usuario: dict = Depends(exigir_admin),
 ):
@@ -78,24 +81,32 @@ def criar_produto(
             estoque=dados.estoque,
         )
     except Exception as erro:
-        raise HTTPException(status_code=400, detail=str(erro))
+        logger.error(f"Erro ao criar produto ({dados.nome}): {erro}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Dados inválidos para cadastro de produto")
 
     return {"id": novo_id, "mensagem": "Produto criado com sucesso"}
 
 
 @router.patch("/{produto_id}")
+@limiter.limit("30/minute")
 def atualizar_produto(
+    request: Request,
     produto_id: int,
     dados: ProdutoAtualizacao,
     usuario: dict = Depends(exigir_admin),
 ):
     """Atualiza dados cadastrais ou estoque do produto e invalida o cache (Apenas Administradores)."""
-    linhas_alteradas = produto_repo.atualizar_produto(
-        produto_id=produto_id,
-        nome=dados.nome,
-        preco=dados.preco,
-        estoque=dados.estoque,
-    )
+    try:
+        linhas_alteradas = produto_repo.atualizar_produto(
+            produto_id=produto_id,
+            nome=dados.nome,
+            preco=dados.preco,
+            estoque=dados.estoque,
+        )
+    except Exception as erro:
+        logger.error(f"Erro ao atualizar produto {produto_id}: {erro}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Dados inválidos para atualização de produto")
+
     if linhas_alteradas == 0:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
 
@@ -104,7 +115,9 @@ def atualizar_produto(
 
 
 @router.delete("/{produto_id}")
+@limiter.limit("30/minute")
 def deletar_produto(
+    request: Request,
     produto_id: int,
     usuario: dict = Depends(exigir_admin),
 ):
@@ -112,6 +125,7 @@ def deletar_produto(
     try:
         linhas_apagadas = produto_repo.deletar_produto(produto_id)
     except Exception as erro:
+        logger.warning(f"Tentativa de excluir produto com dependências ({produto_id}): {erro}")
         raise HTTPException(
             status_code=400,
             detail="Não é possível excluir produto com histórico de pedidos vinculados.",
@@ -122,3 +136,4 @@ def deletar_produto(
 
     cache.invalidar_produto_no_cache(produto_id)
     return {"mensagem": "Produto apagado com sucesso"}
+

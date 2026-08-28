@@ -426,5 +426,42 @@ def test_checkout_rejeita_entidades_inexistentes(client, funcionario_token):
     assert res2.status_code == 404
 
 
+# ---------------------------------------------------------
+# Segurança Ofensiva & Hardening OWASP
+# ---------------------------------------------------------
+
+def test_headers_de_seguranca_owasp_presentes_na_resposta(client):
+    """Garante injeção de cabeçalhos de segurança OWASP em todas as respostas HTTP."""
+    resposta = client.get("/")
+    assert resposta.status_code == 200
+    assert resposta.headers.get("x-content-type-options") == "nosniff"
+    assert resposta.headers.get("x-frame-options") == "DENY"
+    assert "strict-transport-security" in resposta.headers
+    assert resposta.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
+    assert resposta.headers.get("x-xss-protection") == "1; mode=block"
+
+
+def test_schema_cliente_rejeita_payload_com_nome_ou_endereco_gigante(client, admin_token):
+    """Garante defesa contra DoS por payload gigante, rejeitando campos que excedem max_length."""
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # Nome com mais de 100 caracteres
+    resposta = client.post(
+        "/clientes",
+        headers=headers,
+        json={"nome": "A" * 105, "email": _email_unico()},
+    )
+    assert resposta.status_code == 422
+
+    # Endereço com mais de 255 caracteres
+    resposta_end = client.post(
+        "/clientes",
+        headers=headers,
+        json={"nome": "Cliente Valido", "email": _email_unico(), "endereco": "B" * 300},
+    )
+    assert resposta_end.status_code == 422
+
+
+
 
 

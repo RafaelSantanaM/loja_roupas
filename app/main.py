@@ -49,7 +49,16 @@ async def correlation_id_and_logging_middleware(request: Request, call_next):
         logger.info(
             f"<-- {request.method} {request.url.path} - Status: {response.status_code} ({duracao_ms:.2f}ms)"
         )
+        # Rastreabilidade e Correlation ID
         response.headers["X-Request-ID"] = req_id
+
+        # OWASP Security Headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+
         return response
     except Exception as exc:
         duracao_ms = (time.perf_counter() - inicio) * 1000

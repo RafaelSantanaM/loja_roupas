@@ -47,9 +47,10 @@ def criar_pedido(
     except pedido_repo.EstoqueInsuficienteError as erro:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(erro))
     except Exception as erro:
+        logger.error(f"Erro inesperado ao processar pedido: {erro}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro interno ao processar pedido: {erro}",
+            detail="Erro interno ao processar pedido.",
         )
 
     # Invalida o cache Redis do produto, pois o estoque foi alterado no banco

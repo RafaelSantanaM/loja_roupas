@@ -86,7 +86,8 @@ def refresh(request: Request, dados: RefreshRequest):
 
 
 @router.post("/logout")
-def logout(dados: RefreshRequest):
+@limiter.limit("15/minute")
+def logout(request: Request, dados: RefreshRequest):
     """POST /auth/logout -> revoga um refresh token."""
     try:
         payload = security.verificar_token(dados.refresh_token)
@@ -98,3 +99,4 @@ def logout(dados: RefreshRequest):
         refresh_token_repo.revogar_refresh_token(jti)
 
     return {"mensagem": "Logout realizado"}
+

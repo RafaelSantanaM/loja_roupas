@@ -63,7 +63,8 @@ def buscar(cliente_id: int, usuario: dict = Depends(get_usuario_atual)):
 
 
 @router.post("", status_code=201)
-def criar(cliente: ClienteEntrada, usuario: dict = Depends(get_usuario_atual)):
+@limiter.limit("30/minute")
+def criar(request: Request, cliente: ClienteEntrada, usuario: dict = Depends(get_usuario_atual)):
     try:
         novo_id = cliente_repo.criar_cliente(
             nome=cliente.nome,
@@ -73,7 +74,10 @@ def criar(cliente: ClienteEntrada, usuario: dict = Depends(get_usuario_atual)):
             endereco=cliente.endereco,
         )
     except Exception as erro:
-        raise HTTPException(status_code=400, detail=str(erro))
+        logger.warning(f"Falha ao criar cliente ({cliente.email}): {erro}")
+        if "unique constraint" in str(erro).lower() or "duplicate key" in str(erro).lower():
+            raise HTTPException(status_code=400, detail="E-mail já cadastrado")
+        raise HTTPException(status_code=400, detail="Dados inválidos para cadastro de cliente")
 
     try:
         email_producer.publicar_boas_vindas(novo_id, cliente.nome, cliente.email)
@@ -84,10 +88,16 @@ def criar(cliente: ClienteEntrada, usuario: dict = Depends(get_usuario_atual)):
 
 
 @router.patch("/{cliente_id}")
-def atualizar(cliente_id: int, dados: ClienteAtualizacao, usuario: dict = Depends(get_usuario_atual)):
-    linhas_alteradas = cliente_repo.atualizar_cliente(
-        cliente_id, nome=dados.nome, telefone=dados.telefone, endereco=dados.endereco,
-    )
+@limiter.limit("30/minute")
+def atualizar(request: Request, cliente_id: int, dados: ClienteAtualizacao, usuario: dict = Depends(get_usuario_atual)):
+    try:
+        linhas_alteradas = cliente_repo.atualizar_cliente(
+            cliente_id, nome=dados.nome, telefone=dados.telefone, endereco=dados.endereco,
+        )
+    except Exception as erro:
+        logger.error(f"Erro ao atualizar cliente {cliente_id}: {erro}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Dados inválidos para atualização de cliente")
+
     if linhas_alteradas == 0:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
 
@@ -96,11 +106,18 @@ def atualizar(cliente_id: int, dados: ClienteAtualizacao, usuario: dict = Depend
 
 
 @router.delete("/{cliente_id}")
-def deletar(cliente_id: int, usuario: dict = Depends(exigir_admin)):
+@limiter.limit("30/minute")
+def deletar(request: Request, cliente_id: int, usuario: dict = Depends(exigir_admin)):
     """Só ADMIN pode deletar (RBAC)."""
-    linhas_apagadas = cliente_repo.deletar_cliente(cliente_id)
+    try:
+        linhas_apagadas = cliente_repo.deletar_cliente(cliente_id)
+    except Exception as erro:
+        logger.error(f"Erro ao deletar cliente {cliente_id}: {erro}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Não é possível excluir cliente com histórico vinculado")
+
     if linhas_apagadas == 0:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
 
     cache.invalidar_cliente_no_cache(cliente_id)
     return {"mensagem": "Cliente apagado com sucesso"}
+

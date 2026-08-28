@@ -33,13 +33,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 #    a camada de dependências acima, que permanece em cache.
 COPY . .
 
-# 6) Documentação da porta usada (não abre a porta sozinho --
+# 6) SEGURANÇA (Princípio do Menor Privilégio):
+#    Cria um usuário não-root para execução da aplicação, impedindo que
+#    possíveis explorações obtenham acesso de superusuário ao container/host.
+RUN useradd --create-home --shell /bin/bash appuser && chown -R appuser:appuser /app
+USER appuser
+
+# 7) Documentação da porta usada (não abre a porta sozinho --
 #    isso é feito depois, no "docker run -p" ou no docker-compose).
 EXPOSE 8000
 
-# 7) Comando executado quando o container INICIA.
-#    --host 0.0.0.0 é ESSENCIAL aqui: "127.0.0.1" dentro de um
-#    container só aceitaria conexões de DENTRO dele mesmo --
-#    "0.0.0.0" significa "aceite conexões de qualquer endereço",
-#    o que é necessário para o tráfego externo (mapeado via -p) chegar.
+# 8) Comando executado quando o container INICIA.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
